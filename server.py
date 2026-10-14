@@ -179,13 +179,17 @@ class H(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204); self.cors(); self.end_headers()
 
+    def deny(self):
+        got = self.headers.get("X-Token", "").strip()
+        self.send_json({"error": "token galat/missing", "got_len": len(got), "want_len": len(TOKEN)}, 401)
+
     def authed(self):
         return not TOKEN or self.headers.get("X-Token", "") == TOKEN or self.path.split("?")[0].endswith(("/", ".html")) 
 
     def do_GET(self):
         path = self.path.split("?")[0]
         if path not in ("/", "/index.html") and TOKEN and self.headers.get("X-Token", "").strip() != TOKEN:
-            return self.send_json({"error": "token galat/missing"}, 401)
+            return self.deny()
         if path == "/api/screen":
             if S["state"] in ("ready", "login"):
                 c = {"cmd": "shot", "ev": threading.Event()}
@@ -212,7 +216,7 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if TOKEN and self.headers.get("X-Token", "").strip() != TOKEN:
-            return self.send_json({"error": "token galat/missing"}, 401)
+            return self.deny()
         n = int(self.headers.get("Content-Length", 0))
         d = json.loads(self.rfile.read(n) or b"{}")
         if self.path == "/api/start":
