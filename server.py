@@ -97,8 +97,28 @@ def scrape_chats(page):
     return page.evaluate(js, edge)
 
 
-def snap(page):
-    try: SHOT["png"] = page.screenshot()
+def qr_element(page):
+    """Page me sabse ban-ta QR jaisa (lagbhag square, 120-600px) canvas/img dhoondhta hai."""
+    best, area = None, 0
+    for el in page.locator("canvas, img, svg").all():
+        try:
+            b = el.bounding_box()
+        except Exception:
+            continue
+        if not b or not (120 <= b["width"] <= 600): continue
+        if abs(b["width"] - b["height"]) > 20: continue
+        if b["width"] * b["height"] > area:
+            best, area = el, b["width"] * b["height"]
+    return best
+
+
+def snap(page, qr=False):
+    try:
+        if qr:
+            el = qr_element(page)
+            if el is not None:
+                SHOT["png"] = el.screenshot(); return
+        SHOT["png"] = page.screenshot()
     except Exception: pass
 
 
@@ -110,7 +130,7 @@ def login_loop(page):
             if ap.search_box(page).is_visible():
                 return
         except Exception: pass
-        snap(page)               # dashboard par QR dikhane ke liye
+        snap(page, qr=True)      # dashboard par QR dikhane ke liye (sirf QR crop)
         page.wait_for_timeout(2000)
     raise RuntimeError("10 minute me login nahi hua")
 
