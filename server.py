@@ -191,6 +191,13 @@ def login_loop(page):
     raise RuntimeError("10 minute me login nahi hua")
 
 
+def do_click(page, fx, fy):
+    vp = page.viewport_size or {"width": 1366, "height": 850}
+    page.mouse.click(float(fx) * vp["width"], float(fy) * vp["height"])
+    page.wait_for_timeout(1200)
+    snap(page)
+
+
 def worker():
     pw = ctx = page = None
     while True:
@@ -211,6 +218,8 @@ def worker():
                 set_state("ready", "Taiyaar"); log("ok", "Arattai login ho gaya")
             elif c["cmd"] == "send" and page:
                 run_job(page, c["job"])
+            elif c["cmd"] == "click" and page:
+                do_click(page, c["fx"], c["fy"]); c["ev"].set()
             elif c["cmd"] == "shot" and page:
                 snap(page); c["ev"].set()
             elif c["cmd"] == "chats" and page:
@@ -300,6 +309,12 @@ class H(BaseHTTPRequestHandler):
             cmds.put({"cmd": "start"}); self.send_json({"ok": True})
         elif self.path == "/api/close":
             cmds.put({"cmd": "close"}); self.send_json({"ok": True})
+        elif self.path == "/api/click":
+            if S["state"] != "ready":
+                return self.send_json({"error": "browser taiyaar nahi"}, 400)
+            c = {"cmd": "click", "fx": d.get("fx", 0), "fy": d.get("fy", 0), "ev": threading.Event()}
+            cmds.put(c); c["ev"].wait(20)
+            self.send_json({"ok": True})
         elif self.path == "/api/stop":
             S["stop"] = True; self.send_json({"ok": True})
         elif self.path == "/api/send":
