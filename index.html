@@ -36,7 +36,7 @@ Sending hamesha usi PC se hoti hai jispar ye page khula hai. Ek baar: <a id="dl"
  <span id="st" class="pill">...</span><span id="stm" class="mu"></span></div>
  <div class="row" style="margin-top:10px"><input id="apiu" placeholder="Server URL (cloud: https://xxx.up.railway.app, khaali = yahi PC)"><input id="tok" type="password" placeholder="Access token (cloud ke liye)"><button class="s" onclick="svTok()">Save</button></div>
  <div id="qrbox" style="display:none;margin-top:10px"><b>Arattai app se ye QR scan karein</b> <span class='mu'>(laptop screen par dekhein, phone ki brightness full rakhein; QR badalta rehta hai, jaldi scan karein)</span>:<br><img id="qr" style="width:min(100%,420px);image-rendering:pixelated;background:#fff;padding:12px;border:1px solid var(--bd);border-radius:8px;margin-top:6px"></div>
- <div class="row" style="margin-top:8px"><button class="s" onclick="live()">Browser ka live screenshot dekho</button></div><img id="lv" style="display:none;max-width:100%;margin-top:8px;border:1px solid var(--bd);border-radius:8px">
+ <div class="row" style="margin-top:8px"><button class="s" onclick="live()">Browser ka live screenshot dekho</button></div><div id="lvh" class="mu" style="display:none;margin-top:8px">Tasveer par click karne se wahi click cloud browser me hoga (jaise "Show all" ya koi tab). Click ke baad tasveer khud badal jayegi.</div><img id="lv" style="display:none;max-width:100%;margin-top:8px;border:1px solid var(--bd);border-radius:8px;cursor:crosshair" onclick="lvClick(event)">
  <p class="mu">Local PC par: pehli baar jo browser window khule usme Arattai app se QR scan karein. Login yaad rahega. Ye window bhejte waqt band na karein, aur uspar kuch na karein.</p></div>
 
 <div class="c"><h2>2. Chats / Groups (jinko bhejna hai)</h2>
@@ -89,7 +89,8 @@ async function loadChats(){const r=await fetch(API+'/api/chats',{headers:H0()});
  if(!d.chats.length)return alert('Koi chat nahi mila. Chat ke naam neeche box me khud likh kar Add karo karein.\n\nPage par ye text dikha (mujhe bhej dein):\n'+(d.debug||''));
  $('found').innerHTML='<div class="mu" style="width:100%">Neeche se click karke add karein (list pakki nahi, galat items bhi aa sakte hain):</div>'+d.chats.map(n=>`<span class="tag" style="cursor:pointer" data-n="${esc(n)}">+ ${esc(n)}</span>`).join('');
  $('found').querySelectorAll('[data-n]').forEach(el=>el.onclick=()=>{const n=el.dataset.n;if(!recips.includes(n))recips.push(n);saveR();renderR()})}
-async function live(){const r=await fetch(API+'/api/screen?'+Date.now(),{headers:H0()});if(!r.ok)return alert('Screenshot nahi mila (browser start karein)');$('lv').src=URL.createObjectURL(await r.blob());$('lv').style.display='block'}
+async function lvClick(e){const r=e.target.getBoundingClientRect();await api('click',{fx:(e.clientX-r.left)/r.width,fy:(e.clientY-r.top)/r.height});live()}
+async function live(){const r=await fetch(API+'/api/screen?'+Date.now(),{headers:H0()});if(!r.ok)return alert('Screenshot nahi mila (browser start karein)');$('lv').src=URL.createObjectURL(await r.blob());$('lv').style.display='block';$('lvh').style.display='block'}
 let qrT=0;async function qrTick(){if(Date.now()-qrT<2500)return;qrT=Date.now();try{const r=await fetch(API+'/api/screen?'+qrT,{headers:H0()});if(r.ok)$('qr').src=URL.createObjectURL(await r.blob())}catch(e){}}
 function b64(f){return new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)})}
 async function go(){
