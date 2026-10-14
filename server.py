@@ -121,6 +121,10 @@ def worker():
         c = cmds.get()
         try:
             if c["cmd"] == "start" and ctx is None:
+                if pw:
+                    try: pw.stop()
+                    except Exception: pass
+                    pw = None
                 set_state("starting", "Browser khul raha hai...")
                 pw = sync_playwright().start()
                 ctx = ap.launch(pw)
@@ -144,6 +148,9 @@ def worker():
             if c["cmd"] == "start":
                 try:
                     if ctx: ctx.close()
+                except Exception: pass
+                try:
+                    if pw: pw.stop()      # warna agli baar "Sync API inside asyncio loop" error aata hai
                 except Exception: pass
                 ctx = pw = page = None
                 set_state("idle", "Login nahi hua - dobara try karein")
