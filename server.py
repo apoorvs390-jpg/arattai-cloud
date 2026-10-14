@@ -3,7 +3,7 @@ Arattai Dissemination - local server
 Chalane ke liye:  python server.py   ->  browser me http://localhost:8765 kholein.
 Ye aapke PC par chalta hai aur asli browser (Edge) se web.arattai.in chalata hai.
 """
-import base64, json, os, queue, random, threading, time, traceback, uuid
+import base64, json, os, queue, random, re, threading, time, traceback, uuid
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -122,6 +122,16 @@ def snap(page, qr=False):
     except Exception: pass
 
 
+def refresh_qr(page):
+    try:
+        el = page.get_by_text(re.compile(r"click to reload", re.I)).first
+        if el.is_visible():
+            el.click(timeout=3000)
+            page.wait_for_timeout(1500)
+    except Exception:
+        pass
+
+
 def login_loop(page):
     page.goto(ap.WEB_URL)
     end = time.time() + 600
@@ -130,6 +140,7 @@ def login_loop(page):
             if ap.search_box(page).is_visible():
                 return
         except Exception: pass
+        refresh_qr(page)         # QR expire hua ("Click to reload") to khud click karo
         snap(page, qr=True)      # dashboard par QR dikhane ke liye (sirf QR crop)
         page.wait_for_timeout(2000)
     raise RuntimeError("10 minute me login nahi hua")
