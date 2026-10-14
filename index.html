@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arattai Dissemination</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--tx:#1b2430;--mu:#6b7785;--ac:#0b7d4f;--bd:#dde3ea;--er:#c0392b;--wa:#b36b00}
+@media(prefers-color-scheme:dark){:root{--bg:#12161b;--card:#1b2128;--tx:#e8edf2;--mu:#8b97a5;--bd:#2c353f}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px system-ui,sans-serif}
+.w{max-width:900px;margin:0 auto;padding:16px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:14px}
+h1{font-size:20px;margin:0 0 12px}h2{font-size:15px;margin:0 0 10px}
+button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer}
+button.s{background:transparent;color:var(--tx);border:1px solid var(--bd)}button.r{background:var(--er)}button:disabled{opacity:.5;cursor:default}
+input,textarea{width:100%;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:9px;font:inherit}
+textarea{min-height:110px;resize:vertical}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>*{flex:0 0 auto}.row input{flex:1 1 140px}
+.pill{display:inline-block;padding:3px 10px;border-radius:99px;background:var(--bd);font-size:13px}
+.pill.ok{background:var(--ac);color:#fff}.pill.wk{background:var(--wa);color:#fff}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tag{background:var(--bg);border:1px solid var(--bd);border-radius:99px;padding:4px 6px 4px 12px;font-size:13px}
+.tag b{cursor:pointer;margin-left:6px;color:var(--mu)}
+.mu{color:var(--mu);font-size:13px}.bar{height:8px;background:var(--bd);border-radius:9px;overflow:hidden;margin:10px 0}
+.bar i{display:block;height:100%;background:var(--ac);width:0}
+#log{max-height:260px;overflow:auto;font:13px ui-monospace,monospace}
+.ok{color:var(--ac)}.err{color:var(--er)}.warn{color:var(--wa)}
+.files{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.f{border:1px solid var(--bd);border-radius:8px;padding:6px 8px;font-size:12px}
+.f img{display:block;max-height:60px;margin-bottom:4px}
+.lv{border:1px solid var(--wa);background:rgba(179,107,0,.1);border-radius:8px;padding:10px;margin-top:10px}
+</style></head><body><div class="w">
+<h1>Arattai Dissemination</h1>
+<div id="nosrv" class="c lv" style="display:none"><b>Is PC par tool ka server nahi chal raha.</b><br>
+Sending hamesha usi PC se hoti hai jispar ye page khula hai. Ek baar: <a id="dl" href="#">tool ka ZIP download karein</a>, unzip karein, <b>start.bat</b> chalayein (Python chahiye), phir ye page refresh karein. Har PC/vyakti ka apna Arattai login hoga.</div>
+
+<div class="c"><h2>1. Arattai se connect</h2>
+ <div class="row"><button id="bStart" onclick="api('start')">Browser kholo / Login</button>
+ <button class="s" onclick="api('close')">Browser band karo</button>
+ <span id="st" class="pill">...</span><span id="stm" class="mu"></span></div>
+ <div class="row" style="margin-top:10px"><input id="apiu" placeholder="Server URL (cloud: https://xxx.up.railway.app, khaali = yahi PC)"><input id="tok" type="password" placeholder="Access token (cloud ke liye)"><button class="s" onclick="svTok()">Save</button></div>
+ <div id="qrbox" style="display:none;margin-top:10px"><b>Arattai app se ye QR scan karein:</b><br><img id="qr" style="max-width:100%;border:1px solid var(--bd);border-radius:8px;margin-top:6px"></div>
+ <div class="row" style="margin-top:8px"><button class="s" onclick="live()">Browser ka live screenshot dekho</button></div><img id="lv" style="display:none;max-width:100%;margin-top:8px;border:1px solid var(--bd);border-radius:8px">
+ <p class="mu">Local PC par: pehli baar jo browser window khule usme Arattai app se QR scan karein. Login yaad rahega. Ye window bhejte waqt band na karein, aur uspar kuch na karein.</p></div>
+
+<div class="c"><h2>2. Chats / Groups (jinko bhejna hai)</h2>
+ <textarea id="addTa" placeholder="Chat/group ke naam, ek line me ek (Arattai me jaise dikhte hain bilkul waise)" style="min-height:70px"></textarea>
+ <div class="row" style="margin-top:8px"><button onclick="addBulk()">Add karo</button>
+ <button class="s" onclick="loadChats()">Arattai se list lao (experimental)</button>
+ <button class="s" onclick="recips=[];saveR();renderR()">Sab hatao</button>
+ <span class="mu" id="rc"></span></div>
+ <div id="found" class="tags"></div><div id="tags" class="tags"></div></div>
+
+<div class="c"><h2>3. Message</h2>
+ <textarea id="msg" placeholder="Message likhein..."></textarea>
+ <div class="row" style="margin-top:8px"><input type="file" id="fi" multiple onchange="addFiles(this.files);this.value=''">
+ <span class="mu">ya image copy karke Ctrl+V karein</span></div>
+ <div class="files" id="files"></div>
+ <div class="row" style="margin-top:12px"><span class="mu">Delay (second):</span>
+ <input id="dmin" type="number" value="8" style="max-width:80px"><span>se</span><input id="dmax" type="number" value="15" style="max-width:80px"></div>
+ <div class="lv"><label><input type="checkbox" id="live" style="width:auto" onchange="saveS()"> <b>LIVE MODE</b> — asli groups me bhejna (off ho to sirf "Test" naam wale chats me jayega)</label></div>
+</div>
+
+<div class="c"><h2>4. Bhejo</h2>
+ <div class="row"><button id="bGo" onclick="go()">Broadcast shuru karo</button><button class="r" onclick="api('stop')">Stop</button><span id="pr" class="mu"></span></div>
+ <div class="bar"><i id="pb"></i></div><div id="log"></div></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let API=ld0('ar_api')||(/github\.io$/.test(location.hostname)?'http://localhost:8765':'');
+function ld0(k){try{return localStorage.getItem(k)||''}catch(e){return ''}}
+function svTok(){try{localStorage.setItem('ar_tok',$('tok').value.trim());localStorage.setItem('ar_api',$('apiu').value.trim().replace(/\/$/,''))}catch(e){};location.reload()}
+function H0(){return {'X-Token':ld0('ar_tok')}}
+let recips=[],files=[],ready=false;
+function ld(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
+function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+recips=ld('ar_recips',[]);const S0=ld('ar_set',{});
+$('msg').value=S0.msg||'';$('dmin').value=S0.min||8;$('dmax').value=S0.max||15;$('live').checked=!!S0.live;
+function saveR(){sv('ar_recips',recips)}
+function saveS(){sv('ar_set',{msg:$('msg').value,min:$('dmin').value,max:$('dmax').value,live:$('live').checked})}
+['msg','dmin','dmax'].forEach(i=>$(i).addEventListener('input',saveS));
+function renderR(){$('tags').innerHTML=recips.map((n,i)=>`<span class="tag">${esc(n)}<b onclick="recips.splice(${i},1);saveR();renderR()">✕</b></span>`).join('');$('rc').textContent=recips.length+' chune hue'}
+function esc(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function addBulk(){for(const l of $('addTa').value.split('\n')){const n=l.trim();if(n&&!recips.includes(n))recips.push(n)}$('addTa').value='';saveR();renderR()}
+function addFiles(fl){for(const f of fl){files.push(f)}renderF()}
+function renderF(){$('files').innerHTML='';files.forEach((f,i)=>{const d=document.createElement('div');d.className='f';
+ if(f.type.startsWith('image/')){const im=document.createElement('img');im.src=URL.createObjectURL(f);d.appendChild(im)}
+ d.append(f.name+' ('+Math.round(f.size/1024)+' KB) ');const b=document.createElement('b');b.textContent='✕';b.style.cursor='pointer';b.onclick=()=>{files.splice(i,1);renderF()};d.appendChild(b);$('files').appendChild(d)})}
+document.addEventListener('paste',e=>{for(const it of e.clipboardData.items){if(it.kind==='file'){const f=it.getAsFile();if(f){const n=f.name&&f.name!=='image.png'?f.name:'pasted_'+Date.now()+'.png';files.push(new File([f],n,{type:f.type}));}}}renderF()});
+async function api(p,b){const r=await fetch(API+'/api/'+p,{method:'POST',headers:H0(),body:JSON.stringify(b||{})});return r.json()}
+async function loadChats(){const r=await fetch(API+'/api/chats',{headers:H0()});const d=await r.json();if(d.error)return alert(d.error);
+ $('found').innerHTML='<div class="mu" style="width:100%">Neeche se click karke add karein (list pakki nahi, galat items bhi aa sakte hain):</div>'+d.chats.map(n=>`<span class="tag" style="cursor:pointer" data-n="${esc(n)}">+ ${esc(n)}</span>`).join('');
+ $('found').querySelectorAll('[data-n]').forEach(el=>el.onclick=()=>{const n=el.dataset.n;if(!recips.includes(n))recips.push(n);saveR();renderR()})}
+async function live(){const r=await fetch(API+'/api/screen?'+Date.now(),{headers:H0()});if(!r.ok)return alert('Screenshot nahi mila (browser start karein)');$('lv').src=URL.createObjectURL(await r.blob());$('lv').style.display='block'}
+let qrT=0;async function qrTick(){if(Date.now()-qrT<2500)return;qrT=Date.now();try{const r=await fetch(API+'/api/screen?'+qrT,{headers:H0()});if(r.ok)$('qr').src=URL.createObjectURL(await r.blob())}catch(e){}}
+function b64(f){return new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)})}
+async function go(){
+ if(!ready)return alert('Pehle Arattai se connect karein');
+ if(!recips.length)return alert('Koi chat nahi chuna');
+ const live=$('live').checked;
+ if(live&&!confirm(recips.length+' ASLI chats/groups me bhejna hai. Pakka?'))return;
+ const fs=[];for(const f of files)fs.push({name:f.name,data:await b64(f)});
+ const r=await api('send',{chats:recips,text:$('msg').value,files:fs,min:$('dmin').value,max:$('dmax').value,live});
+ if(r.error)alert(r.error)}
+async function poll(){try{const d=await (await fetch(API+'/api/status',{headers:H0()})).json();
+ $('nosrv').style.display='none';ready=d.state==='ready';const st=$('st');st.textContent={idle:'Band',starting:'Khul raha',login:'Login ka intezaar',ready:'Taiyaar',sending:'Bhej rahe'}[d.state]||d.state;
+ st.className='pill '+(ready?'ok':d.state==='idle'?'':'wk');$('stm').textContent=d.msg;
+ $('bGo').disabled=!ready;$('qrbox').style.display=d.state==='login'?'block':'none';if(d.state==='login')qrTick();const j=d.job;if(j&&j.total){$('pr').textContent=`${j.done}/${j.total} · safal ${j.ok} · fail ${j.fail}`+(j.current?` · ab: ${j.current}`:'');$('pb').style.width=(100*j.done/j.total)+'%'}
+ const L=$('log'),bot=L.scrollTop+L.clientHeight>=L.scrollHeight-20;
+ L.innerHTML=d.log.map(x=>`<div class="${x.k}">${x.t} ${esc(x.m)}</div>`).join('');if(bot)L.scrollTop=L.scrollHeight}catch(e){$('stm').textContent='Server se connection nahi';$('nosrv').style.display='block'}}
+(function(){const m=location.hostname.match(/^(.+)\.github\.io$/),p=location.pathname.split('/')[1];if(m&&p)$('dl').href='https://github.com/'+m[1]+'/'+p+'/archive/refs/heads/main.zip';else $('dl').removeAttribute('href')})();
+$('apiu').value=ld0('ar_api');$('tok').value=ld0('ar_tok');
+renderR();setInterval(poll,1500);poll();
+</script></body></html>
