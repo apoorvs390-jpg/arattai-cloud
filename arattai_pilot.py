@@ -71,7 +71,7 @@ def shot(page, title, stage):
 def launch(p):
     if CLOUD:
         return p.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR), headless=True, viewport={"width": 1366, "height": 850},
+            user_data_dir=str(PROFILE_DIR), headless=True, viewport={"width": 1366, "height": 850}, device_scale_factor=2,
             user_agent=UA, args=["--no-sandbox", "--disable-dev-shm-usage"])
     kwargs = dict(user_data_dir=str(PROFILE_DIR), headless=False, viewport={"width": 1366, "height": 850})
     try:
