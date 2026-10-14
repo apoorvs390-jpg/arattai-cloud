@@ -84,9 +84,18 @@ def run_job(page, job):
 def scrape_chats(page):
     """Baayein panel ke chat naam (scroll karke). Layout pakka nahi, isliye khaali aaye to debug text bhi lautata hai."""
     edge = ap.edge_x(page)
+    # Agar chat panel "Unread" jaise filter par atka ho to "Show all" dabakar poori list kholo
+    for label in ("Show all", "All chats", "All"):
+        try:
+            el = page.get_by_text(label, exact=True).first
+            bb = el.bounding_box() if el.is_visible() else None
+            if bb and bb["x"] < edge * 1.6 and bb["y"] > 60:
+                el.click(timeout=2000); page.wait_for_timeout(1500); break
+        except Exception:
+            pass
     collect = """(edge) => {
       const out = [];
-      const skip = /^(\\d{1,2}[:\\/.]\\d{1,2}.*|today|yesterday|now|online|typing\\.*|\\d+)$/i;
+      const skip = /^(you're all caught up!?|you have no unread messages|show all|unread|all|groups|chats|search chats|\\d{1,2}[:\\/.]\\d{1,2}.*|today|yesterday|now|online|typing\\.*|\\d+)$/i;
       for (const el of document.querySelectorAll('*')) {
         if (el.children.length) continue;
         const r = el.getBoundingClientRect();
