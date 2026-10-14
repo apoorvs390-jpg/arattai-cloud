@@ -12,7 +12,7 @@ import arattai_pilot as ap
 from playwright.sync_api import sync_playwright
 
 PORT = int(os.environ.get("PORT", 8765))
-TOKEN = os.environ.get("ACCESS_TOKEN", "")   # cloud me zaroor set karein
+TOKEN = os.environ.get("ACCESS_TOKEN", "").strip().strip('"').strip("'")   # cloud me zaroor set karein
 AUTOSTART = os.environ.get("AUTOSTART") == "1"
 SHOT = {"png": b""}
 BASE = Path(__file__).resolve().parent
@@ -184,7 +184,7 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?")[0]
-        if path not in ("/", "/index.html") and TOKEN and self.headers.get("X-Token", "") != TOKEN:
+        if path not in ("/", "/index.html") and TOKEN and self.headers.get("X-Token", "").strip() != TOKEN:
             return self.send_json({"error": "token galat/missing"}, 401)
         if path == "/api/screen":
             if S["state"] in ("ready", "login"):
@@ -211,7 +211,7 @@ class H(BaseHTTPRequestHandler):
             self.send_json({"error": "not found"}, 404)
 
     def do_POST(self):
-        if TOKEN and self.headers.get("X-Token", "") != TOKEN:
+        if TOKEN and self.headers.get("X-Token", "").strip() != TOKEN:
             return self.send_json({"error": "token galat/missing"}, 401)
         n = int(self.headers.get("Content-Length", 0))
         d = json.loads(self.rfile.read(n) or b"{}")
