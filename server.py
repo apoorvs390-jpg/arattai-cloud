@@ -82,19 +82,55 @@ def run_job(page, job):
 
 
 def scrape_chats(page):
-    """Best-effort: baayein panel ke chat naam. Selector pakka nahi, isliye manual add bhi rakha hai."""
+    """Baayein panel ke chat naam (scroll karke). Layout pakka nahi, isliye khaali aaye to debug text bhi lautata hai."""
     edge = ap.edge_x(page)
-    js = """(edge) => {
-      const out = new Set();
+    collect = """(edge) => {
+      const out = [];
+      const skip = /^(\\d{1,2}[:\\/.]\\d{1,2}.*|today|yesterday|now|online|typing\\.*|\\d+)$/i;
       for (const el of document.querySelectorAll('*')) {
         if (el.children.length) continue;
         const r = el.getBoundingClientRect();
         const t = (el.textContent || '').trim();
-        if (r.width && r.x < edge && r.y > 120 && t.length > 1 && t.length < 60 && !/^\\d+[:\\/]/.test(t)) out.add(t);
+        if (r.width && r.height && r.x < edge && r.y > 110 && r.y < innerHeight && t.length > 1 && t.length < 70 && !skip.test(t)) out.push([r.y, t]);
       }
-      return [...out];
+      out.sort((a, b) => a[0] - b[0]);
+      return out.map(x => x[1]);
     }"""
-    return page.evaluate(js, edge)
+    scroll = """(edge) => {
+      let el = document.elementFromPoint(Math.min(edge * 0.5, 160), innerHeight * 0.6);
+      while (el && el !== document.body) {
+        if (el.scrollHeight > el.clientHeight + 20) {
+          const before = el.scrollTop; el.scrollTop += el.clientHeight * 0.8;
+          return el.scrollTop !== before;
+        }
+        el = el.parentElement;
+      }
+      return false;
+    }"""
+    seen, order, idle = set(), [], 0
+    for _ in range(40):
+        try:
+            names = page.evaluate(collect, edge)
+        except Exception:
+            names = []
+        new = [n for n in names if n not in seen]
+        for n in new:
+            seen.add(n); order.append(n)
+        idle = 0 if new else idle + 1
+        try:
+            moved = page.evaluate(scroll, edge)
+        except Exception:
+            moved = False
+        if not moved or idle >= 3:
+            break
+        page.wait_for_timeout(700)
+    try: page.evaluate("(e)=>{let el=document.elementFromPoint(Math.min(e*0.5,160),innerHeight*0.6);while(el&&el!==document.body){if(el.scrollTop>0){el.scrollTop=0;break}el=el.parentElement}}", edge)
+    except Exception: pass
+    debug = ""
+    if not order:
+        try: debug = page.inner_text("body")[:1200]
+        except Exception: debug = "(page text nahi mila)"
+    return {"names": order, "debug": debug}
 
 
 def qr_element(page):
@@ -187,7 +223,7 @@ def worker():
                 set_state("idle", "Login nahi hua - dobara try karein")
             elif S["state"] == "sending":
                 set_state("ready", "Taiyaar")
-            if "ev" in c: c["out"].append([]); c["ev"].set()
+            if "ev" in c: c["out"].append({"names": [], "debug": "error: " + repr(e)[:200]}); c["ev"].set()
 
 
 class H(BaseHTTPRequestHandler):
@@ -241,7 +277,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "Pehle browser start/login karein"}, 400)
             c = {"cmd": "chats", "out": [], "ev": threading.Event()}
             cmds.put(c); c["ev"].wait(30)
-            self.send_json({"chats": c["out"][0] if c["out"] else []})
+            r = c["out"][0] if c["out"] and isinstance(c["out"][0], dict) else {"names": [], "debug": "(koi jawab nahi)"}
+            self.send_json({"chats": r["names"], "debug": r["debug"]})
         else:
             self.send_json({"error": "not found"}, 404)
 
