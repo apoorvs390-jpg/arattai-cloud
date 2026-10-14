@@ -35,7 +35,7 @@ Sending hamesha usi PC se hoti hai jispar ye page khula hai. Ek baar: <a id="dl"
  <button class="s" onclick="api('close')">Browser band karo</button>
  <span id="st" class="pill">...</span><span id="stm" class="mu"></span></div>
  <div class="row" style="margin-top:10px"><input id="apiu" placeholder="Server URL (cloud: https://xxx.up.railway.app, khaali = yahi PC)"><input id="tok" type="password" placeholder="Access token (cloud ke liye)"><button class="s" onclick="svTok()">Save</button></div>
- <div id="qrbox" style="display:none;margin-top:10px"><b>Arattai app se ye QR scan karein:</b><br><img id="qr" style="max-width:100%;border:1px solid var(--bd);border-radius:8px;margin-top:6px"></div>
+ <div id="qrbox" style="display:none;margin-top:10px"><b>Arattai app se ye QR scan karein</b> <span class='mu'>(laptop screen par dekhein, phone ki brightness full rakhein; QR badalta rehta hai, jaldi scan karein)</span>:<br><img id="qr" style="width:min(100%,420px);image-rendering:pixelated;background:#fff;padding:12px;border:1px solid var(--bd);border-radius:8px;margin-top:6px"></div>
  <div class="row" style="margin-top:8px"><button class="s" onclick="live()">Browser ka live screenshot dekho</button></div><img id="lv" style="display:none;max-width:100%;margin-top:8px;border:1px solid var(--bd);border-radius:8px">
  <p class="mu">Local PC par: pehli baar jo browser window khule usme Arattai app se QR scan karein. Login yaad rahega. Ye window bhejte waqt band na karein, aur uspar kuch na karein.</p></div>
 
@@ -63,9 +63,10 @@ Sending hamesha usi PC se hoti hai jispar ye page khula hai. Ek baar: <a id="dl"
 </div>
 <script>
 const $=id=>document.getElementById(id);
-let API=ld0('ar_api')||(/github\.io$/.test(location.hostname)?'http://localhost:8765':'');
+let API=fixUrl(ld0('ar_api'))||(/github\.io$/.test(location.hostname)?'http://localhost:8765':'');
+function fixUrl(u){u=(u||'').trim().replace(/\/+$/,'');return u&&!/^https?:\/\//i.test(u)?'https://'+u:u}
 function ld0(k){try{return localStorage.getItem(k)||''}catch(e){return ''}}
-function svTok(){try{localStorage.setItem('ar_tok',$('tok').value.trim());localStorage.setItem('ar_api',$('apiu').value.trim().replace(/\/$/,''))}catch(e){};location.reload()}
+function svTok(){try{localStorage.setItem('ar_tok',$('tok').value.trim());localStorage.setItem('ar_api',fixUrl($('apiu').value))}catch(e){};location.reload()}
 function H0(){return {'X-Token':ld0('ar_tok')}}
 let recips=[],files=[],ready=false;
 function ld(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
