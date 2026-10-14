@@ -99,6 +99,7 @@ async function go(){
  const r=await api('send',{chats:recips,text:$('msg').value,files:fs,min:$('dmin').value,max:$('dmax').value,live});
  if(r.error)alert(r.error)}
 async function poll(){try{const d=await (await fetch(API+'/api/status',{headers:H0()})).json();
+ if(d.error){$('nosrv').style.display='none';$('st').textContent='Token chahiye';$('st').className='pill wk';$('stm').textContent=d.error+' - neeche Access token daal kar Save dabayein';ready=false;return}
  $('nosrv').style.display='none';ready=d.state==='ready';const st=$('st');st.textContent={idle:'Band',starting:'Khul raha',login:'Login ka intezaar',ready:'Taiyaar',sending:'Bhej rahe'}[d.state]||d.state;
  st.className='pill '+(ready?'ok':d.state==='idle'?'':'wk');$('stm').textContent=d.msg;
  $('bGo').disabled=!ready;$('qrbox').style.display=d.state==='login'?'block':'none';if(d.state==='login')qrTick();const j=d.job;if(j&&j.total){$('pr').textContent=`${j.done}/${j.total} · safal ${j.ok} · fail ${j.fail}`+(j.current?` · ab: ${j.current}`:'');$('pb').style.width=(100*j.done/j.total)+'%'}
