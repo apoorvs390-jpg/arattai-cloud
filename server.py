@@ -15,6 +15,7 @@ PORT = int(os.environ.get("PORT", 8765))
 TOKEN = os.environ.get("ACCESS_TOKEN", "").strip().strip('"').strip("'")   # cloud me zaroor set karein
 AUTOSTART = os.environ.get("AUTOSTART") == "1"
 SHOT = {"png": b""}
+ERR = {"png": b"", "ts": 0}
 BASE = Path(__file__).resolve().parent
 UP = ap.DATA / "uploads"; UP.mkdir(exist_ok=True)
 
@@ -56,7 +57,7 @@ def run_job(page, job):
                 raise RuntimeError("TEST MODE me sirf 'Test' naam wale chats allowed hain")
             if not ap.open_chat(page, title):
                 ap.shot(page, title, "open_fail")
-                raise RuntimeError("sahi chat khula nahi - kuch nahi bheja")
+                raise RuntimeError("sahi chat khula nahi - kuch nahi bheja | " + ap.diag_open(page, title))
             for f in files:
                 ap.send_file(page, title, f)
                 page.wait_for_timeout(1500)
@@ -70,6 +71,9 @@ def run_job(page, job):
             status, note = "FAIL", repr(e)[:200]
             job["fail"] += 1
             ap.shot(page, title, "error")
+            try:
+                ERR["png"] = page.screenshot(); ERR["ts"] = int(time.time())
+            except Exception: pass
             log("err", f"{title}: {note}")
             # chat khula rah gaya ho to wapas theek state me aane ki koshish
             try: page.keyboard.press("Escape")
@@ -356,6 +360,11 @@ class H(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         if path not in ("/", "/index.html") and TOKEN and self.headers.get("X-Token", "").strip() != TOKEN:
             return self.deny()
+        if path == "/api/errshot":
+            b = ERR["png"] or b""
+            self.send_response(200 if b else 404); self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(b))); self.send_header("Cache-Control", "no-store")
+            self.cors(); self.end_headers(); self.wfile.write(b); return
         if path == "/api/screen":
             if S["state"] in ("ready", "login"):
                 c = {"cmd": "shot", "ev": threading.Event()}
@@ -370,7 +379,7 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
         elif self.path == "/api/status":
             with LOCK:
-                self.send_json({"state": S["state"], "msg": S["msg"], "job": S["job"], "log": S["log"][-200:]})
+                self.send_json({"state": S["state"], "msg": S["msg"], "job": S["job"], "log": S["log"][-200:], "errts": ERR["ts"]})
         elif self.path == "/api/chats":
             if S["state"] != "ready":
                 return self.send_json({"error": "Pehle browser start/login karein"}, 400)
