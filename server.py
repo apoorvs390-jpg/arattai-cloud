@@ -65,6 +65,8 @@ def run_job(page, job):
             job["ok"] += 1
             log("ok", f"{title}: bheja")
         except Exception as e:
+            if is_closed_err(e):
+                raise                     # browser band ho gaya: poora job rokna
             status, note = "FAIL", repr(e)[:200]
             job["fail"] += 1
             ap.shot(page, title, "error")
@@ -226,6 +228,11 @@ def login_loop(page):
     raise RuntimeError("10 minute me login nahi hua")
 
 
+def is_closed_err(e):
+    m = repr(e)
+    return "has been closed" in m or "TargetClosed" in m or "Browser closed" in m
+
+
 def do_click(page, fx, fy):
     vp = page.viewport_size or {"width": 1366, "height": 850}
     page.mouse.click(float(fx) * vp["width"], float(fy) * vp["height"])
@@ -254,6 +261,15 @@ def worker():
                     set_state("ready", "Taiyaar")
             continue
         try:
+            if c["cmd"] == "start" and ctx is not None:
+                try: dead = page.is_closed()
+                except Exception: dead = True
+                if dead:
+                    try: ctx.close()
+                    except Exception: pass
+                    try: pw.stop()
+                    except Exception: pass
+                    ctx = pw = page = None
             if c["cmd"] == "start" and ctx is None:
                 if pw:
                     try: pw.stop()
@@ -283,6 +299,18 @@ def worker():
         except Exception as e:
             traceback.print_exc()
             log("err", repr(e)[:200])
+            if is_closed_err(e) and c["cmd"] != "start":
+                try:
+                    if ctx: ctx.close()
+                except Exception: pass
+                try:
+                    if pw: pw.stop()
+                except Exception: pass
+                ctx = pw = page = None
+                log("err", "Browser band ho gaya. 'Browser kholo / Login' dabakar dobara shuru karein.")
+                set_state("idle", "Browser band ho gaya - dobara Browser kholo / Login dabayein")
+                if "ev" in c: c["out"].append({"names": [], "debug": "browser band"}); c["ev"].set()
+                continue
             if c["cmd"] == "start":
                 try:
                     if ctx: ctx.close()
