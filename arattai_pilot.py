@@ -154,25 +154,50 @@ def header_shows(page, title):
 
 
 def open_chat(page, title):
+    """Chat dhoondhkar kholta hai. Click ke kai tareeke aazmata hai aur header se verify karta hai."""
     sb = search_box(page)
     sb.click()
     sb.fill("")
     sb.fill(title)
     page.wait_for_timeout(2000)
     edge = edge_x(page)
-    target = None
+
+    cands = []
     for el in page.get_by_text(title, exact=True).all():
         try:
-            box = el.bounding_box()
+            bb = el.bounding_box()
         except Exception:
             continue
-        if box and box["x"] < edge:  # bayein panel ke result me se
-            target = el
-            break
-    if target is None:
-        target = page.get_by_text(title, exact=True).first
-    target.click()
-    page.wait_for_timeout(2000)
+        if bb and bb["width"] > 0 and bb["height"] > 0 and bb["x"] < edge:   # baayein panel ke result
+            cands.append((el, bb))
+
+    js_row = """e => { const row = e.closest('li, [role=listitem], [role=option], [class*=chat], [class*=item], [class*=row]') || e.parentElement || e;
+                     row.click(); }"""
+    for el, bb in cands:
+        for how in ("normal", "force", "row_js", "mouse"):
+            try:
+                if how == "normal":
+                    el.click(timeout=2500)
+                elif how == "force":
+                    el.click(timeout=2500, force=True)
+                elif how == "row_js":
+                    el.evaluate(js_row)
+                else:
+                    page.mouse.click(bb["x"] + bb["width"] / 2, bb["y"] + bb["height"] / 2)
+                page.wait_for_timeout(1500)
+                if header_shows(page, title):
+                    return True
+            except Exception:
+                continue
+
+    # aakhri tareeka: keyboard se pehla search result
+    try:
+        sb.click()
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(1500)
+    except Exception:
+        pass
     return header_shows(page, title)
 
 
