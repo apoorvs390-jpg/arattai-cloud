@@ -83,8 +83,40 @@ def launch(p):
         return p.chromium.launch_persistent_context(**kwargs)
 
 
+SEARCH_SEL = ('input[placeholder*="earch" i]:visible, input[type="search"]:visible, '
+              'input[aria-label*="earch" i]:visible, [role="searchbox"]:visible, '
+              '[contenteditable="true"][aria-label*="earch" i]:visible')
+
+
 def search_box(page):
-    return page.get_by_placeholder(re.compile("Search chats", re.I)).first
+    """Chat dhundhne ka search box: kai tareeke se dhoondhta hai (placeholder badal gaya ho to bhi)."""
+    loc = page.locator(SEARCH_SEL)
+    try:
+        if loc.count() > 0:
+            return loc.first
+    except Exception:
+        pass
+    # search icon dabakar box kholne ki koshish
+    for sel in ('[aria-label*="earch" i]:visible', '[title*="earch" i]:visible', '[class*="search" i]:visible'):
+        try:
+            icon = page.locator(sel).first
+            if icon.count() > 0:
+                icon.click(timeout=1500)
+                page.wait_for_timeout(600)
+                if page.locator(SEARCH_SEL).count() > 0:
+                    return page.locator(SEARCH_SEL).first
+        except Exception:
+            pass
+    # aakhri tareeka: baayein panel ke upar ka pehla dikhne wala input
+    edge = edge_x(page)
+    for el in page.locator("input:visible").all():
+        try:
+            bb = el.bounding_box()
+        except Exception:
+            continue
+        if bb and bb["x"] < edge and bb["y"] < 220:
+            return el
+    return page.locator(SEARCH_SEL).first
 
 
 def wait_for_login(page):
