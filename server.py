@@ -39,6 +39,10 @@ def run_job(page, job):
     chats, text, files = job["chats"], job["text"], job["files"]
     lo, hi, live = job["min"], job["max"], job["live"]
     job["total"] = len(chats); job["done"] = job["ok"] = job["fail"] = 0
+    if logged_out(page):
+        log("err", "Arattai logout ho gaya hai. Neeche QR scan karke dobara login karein, phir bhejein.")
+        set_state("login", "Logout ho gaya - QR scan karein")
+        login_loop(page); set_state("ready", "Taiyaar"); return
     with LOCK:
         S["stop"] = False
     set_state("sending", "Bhej rahe hain...")
@@ -167,6 +171,37 @@ def snap(page, qr=False):
     except Exception: pass
 
 
+COOKIE_FILE = ap.DATA / "cookies.json"
+
+
+def logged_out(page):
+    """Arattai ka login/QR page dikh raha hai to True."""
+    try:
+        return page.get_by_text(re.compile(r"Steps to sign in|Sign In Using Mobile Number", re.I)).first.is_visible()
+    except Exception:
+        return False
+
+
+def save_cookies(ctx):
+    """Session cookies ko file me rakhta hai, taaki restart ke baad login na ud jaye."""
+    try:
+        ck = ctx.cookies()
+        for c in ck:
+            if c.get("expires", -1) in (-1, None):
+                c["expires"] = time.time() + 30 * 86400
+        COOKIE_FILE.write_text(json.dumps(ck), encoding="utf-8")
+    except Exception as e:
+        print("cookie save fail:", repr(e)[:100])
+
+
+def load_cookies(ctx):
+    try:
+        if COOKIE_FILE.exists():
+            ctx.add_cookies(json.loads(COOKIE_FILE.read_text(encoding="utf-8")))
+    except Exception as e:
+        print("cookie load fail:", repr(e)[:100])
+
+
 def refresh_qr(page):
     try:
         el = page.get_by_text(re.compile(r"click to reload", re.I)).first
@@ -201,7 +236,23 @@ def do_click(page, fx, fy):
 def worker():
     pw = ctx = page = None
     while True:
-        c = cmds.get()
+        try:
+            c = cmds.get(timeout=20)
+        except queue.Empty:
+            # khaali samay me check: logout to nahi ho gaya?
+            if ctx and page and S["state"] == "ready":
+                try:
+                    if logged_out(page):
+                        log("err", "Arattai logout ho gaya. QR scan karein.")
+                        set_state("login", "Logout ho gaya - QR scan karein")
+                        login_loop(page); save_cookies(ctx)
+                        set_state("ready", "Taiyaar"); log("ok", "Arattai login ho gaya")
+                    else:
+                        save_cookies(ctx)
+                except Exception as e:
+                    log("err", "watchdog: " + repr(e)[:150])
+                    set_state("ready", "Taiyaar")
+            continue
         try:
             if c["cmd"] == "start" and ctx is None:
                 if pw:
@@ -211,10 +262,12 @@ def worker():
                 set_state("starting", "Browser khul raha hai...")
                 pw = sync_playwright().start()
                 ctx = ap.launch(pw)
+                load_cookies(ctx)
                 page = ctx.pages[0] if ctx.pages else ctx.new_page()
                 page.set_default_timeout(15000)
                 set_state("login", "Browser me QR scan karein (agar maanga ho)")
                 login_loop(page)
+                save_cookies(ctx)
                 set_state("ready", "Taiyaar"); log("ok", "Arattai login ho gaya")
             elif c["cmd"] == "send" and page:
                 run_job(page, c["job"])
