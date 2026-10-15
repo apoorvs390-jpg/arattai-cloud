@@ -201,6 +201,27 @@ def open_chat(page, title):
     return header_shows(page, title)
 
 
+def diag_open(page, title):
+    """Chat na khule to batata hai ki naam ke upar/aas-paas asli me kya hai (debug ke liye)."""
+    js = """(t) => {
+      const out = [];
+      const q = [...document.querySelectorAll('*')].filter(e => !e.children.length && ((e.textContent||'').trim() === t || e.getAttribute('title') === t));
+      for (const e of q.slice(0, 4)) {
+        const r = e.getBoundingClientRect();
+        const top = document.elementFromPoint(r.x + r.width/2, r.y + r.height/2);
+        const chain = []; let c = e; for (let i = 0; i < 4 && c; i++, c = c.parentElement) chain.push(c.tagName.toLowerCase() + (c.className && c.className.toString ? '.' + c.className.toString().split(' ')[0] : ''));
+        out.push({rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)],
+                  top: top ? (top.tagName.toLowerCase() + '.' + (top.className || '').toString().slice(0, 40)) : null,
+                  same: top === e, chain: chain.join(' < ')});
+      }
+      return {found: q.length, items: out, header: [...document.querySelectorAll('*')].filter(e => !e.children.length && (e.textContent||'').trim() === t).length};
+    }"""
+    try:
+        return str(page.evaluate(js, title))[:600]
+    except Exception as ex:
+        return "diag fail: " + repr(ex)[:120]
+
+
 def find_message_box(page):
     edge = edge_x(page)
     finders = [
