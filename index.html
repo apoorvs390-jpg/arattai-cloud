@@ -59,7 +59,7 @@ Sending hamesha usi PC se hoti hai jispar ye page khula hai. Ek baar: <a id="dl"
 
 <div class="c"><h2>4. Bhejo</h2>
  <div class="row"><button id="bGo" onclick="go()">Broadcast shuru karo</button><button class="r" onclick="api('stop')">Stop</button><span id="pr" class="mu"></span></div>
- <div class="bar"><i id="pb"></i></div><div id="log"></div></div>
+ <div class="bar"><i id="pb"></i></div><div id="log"></div><div id="errbox" style="display:none;margin-top:10px"><b>Aakhri fail ke waqt Arattai page aisa tha:</b><br><img id="errimg" style="max-width:100%;border:1px solid var(--bd);border-radius:8px;margin-top:6px"></div></div>
 </div>
 <script>
 const $=id=>document.getElementById(id);
@@ -90,6 +90,7 @@ async function loadChats(){const r=await fetch(API+'/api/chats',{headers:H0()});
  $('found').innerHTML='<div class="mu" style="width:100%">Neeche se click karke add karein (list pakki nahi, galat items bhi aa sakte hain):</div>'+d.chats.map(n=>`<span class="tag" style="cursor:pointer" data-n="${esc(n)}">+ ${esc(n)}</span>`).join('');
  $('found').querySelectorAll('[data-n]').forEach(el=>el.onclick=()=>{const n=el.dataset.n;if(!recips.includes(n))recips.push(n);saveR();renderR()})}
 async function lvClick(e){const r=e.target.getBoundingClientRect();await api('click',{fx:(e.clientX-r.left)/r.width,fy:(e.clientY-r.top)/r.height});live()}
+let errTs=0;async function errShot(ts){try{const r=await fetch(API+'/api/errshot?'+ts,{headers:H0()});if(r.ok){$('errimg').src=URL.createObjectURL(await r.blob());$('errbox').style.display='block'}}catch(e){}}
 async function live(){const r=await fetch(API+'/api/screen?'+Date.now(),{headers:H0()});if(!r.ok)return alert('Screenshot nahi mila (browser start karein)');$('lv').src=URL.createObjectURL(await r.blob());$('lv').style.display='block';$('lvh').style.display='block'}
 let qrT=0;async function qrTick(){if(Date.now()-qrT<2500)return;qrT=Date.now();try{const r=await fetch(API+'/api/screen?'+qrT,{headers:H0()});if(r.ok)$('qr').src=URL.createObjectURL(await r.blob())}catch(e){}}
 function b64(f){return new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)})}
@@ -105,7 +106,7 @@ async function poll(){try{const d=await (await fetch(API+'/api/status',{headers:
  if(d.error){$('nosrv').style.display='none';$('st').textContent='Token chahiye';$('st').className='pill wk';$('stm').textContent=d.error+(d.want_len!==undefined?` (aapne ${d.got_len} characters bheje, server ko ${d.want_len} chahiye)`:'')+' - neeche Access token daal kar Save dabayein';ready=false;return}
  $('nosrv').style.display='none';ready=d.state==='ready';const st=$('st');st.textContent={idle:'Band',starting:'Khul raha',login:'Login ka intezaar',ready:'Taiyaar',sending:'Bhej rahe'}[d.state]||d.state;
  st.className='pill '+(ready?'ok':d.state==='idle'?'':'wk');$('stm').textContent=d.msg;
- $('bGo').disabled=!ready;$('qrbox').style.display=d.state==='login'?'block':'none';if(d.state==='login')qrTick();const j=d.job;if(j&&j.total){$('pr').textContent=`${j.done}/${j.total} · safal ${j.ok} · fail ${j.fail}`+(j.current?` · ab: ${j.current}`:'');$('pb').style.width=(100*j.done/j.total)+'%'}
+ if(d.errts&&d.errts!==errTs){errTs=d.errts;errShot(d.errts)}$('bGo').disabled=!ready;$('qrbox').style.display=d.state==='login'?'block':'none';if(d.state==='login')qrTick();const j=d.job;if(j&&j.total){$('pr').textContent=`${j.done}/${j.total} · safal ${j.ok} · fail ${j.fail}`+(j.current?` · ab: ${j.current}`:'');$('pb').style.width=(100*j.done/j.total)+'%'}
  const L=$('log'),bot=L.scrollTop+L.clientHeight>=L.scrollHeight-20;
  L.innerHTML=d.log.map(x=>`<div class="${x.k}">${x.t} ${esc(x.m)}</div>`).join('');if(bot)L.scrollTop=L.scrollHeight}catch(e){$('stm').textContent='Server se connection nahi';$('nosrv').style.display='block'}}
 (function(){const m=location.hostname.match(/^(.+)\.github\.io$/),p=location.pathname.split('/')[1];if(m&&p)$('dl').href='https://github.com/'+m[1]+'/'+p+'/archive/refs/heads/main.zip';else $('dl').removeAttribute('href')})();
