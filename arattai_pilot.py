@@ -68,11 +68,28 @@ def shot(page, title, stage):
     return path
 
 
+def proxy_cfg():
+    """PROXY_URL=http://user:pass@host:port (Railway Variables me) -> Playwright proxy dict. Na ho to None."""
+    u = os.environ.get("PROXY_URL", "").strip().strip('"').strip("'")
+    if not u:
+        return None
+    from urllib.parse import urlparse
+    q = urlparse(u if "://" in u else "http://" + u)
+    cfg = {"server": f"{q.scheme}://{q.hostname}:{q.port}"}
+    if q.username:
+        cfg["username"] = q.username
+        cfg["password"] = q.password or ""
+    return cfg
+
+
 def launch(p):
     if CLOUD:
+        px = proxy_cfg()
+        print("Proxy:", px["server"] if px else "nahi (direct)")
+        kw = {"proxy": px} if px else {}
         return p.chromium.launch_persistent_context(
             user_data_dir=str(PROFILE_DIR), headless=True, viewport={"width": 1366, "height": 850}, device_scale_factor=2,
-            user_agent=UA, args=["--no-sandbox", "--disable-dev-shm-usage"])
+            user_agent=UA, args=["--no-sandbox", "--disable-dev-shm-usage"], **kw)
     kwargs = dict(user_data_dir=str(PROFILE_DIR), headless=False, viewport={"width": 1366, "height": 850})
     try:
         # Windows me Edge pehle se hota hai, alag browser download karne ki zaroorat nahi
@@ -226,8 +243,10 @@ def find_message_box(page):
     edge = edge_x(page)
     finders = [
         lambda: page.get_by_placeholder(re.compile("Type your message", re.I)),
-        lambda: page.locator('[contenteditable="true"]'),
+        lambda: page.locator('[contenteditable]:not([contenteditable="false"])'),
         lambda: page.get_by_role("textbox"),
+        lambda: page.locator('textarea, input[type="text"], input:not([type])'),
+        lambda: page.locator('[data-placeholder], [placeholder]'),
     ]
     for f in finders:
         best, best_y = None, -1
@@ -286,46 +305,218 @@ def send_text(page, title, text):
         raise RuntimeError("message ka bubble dikhai nahi diya (bheja ya nahi, pakka nahi)")
 
 
-def find_attach_clicks(page):
-    """Paperclip button dhoondhne ke tareeke, ek-ek karke try karne ke liye."""
-    sels = [
-        '[aria-label*="ttach" i]',
-        '[title*="ttach" i]',
-        '[aria-label*="clip" i]',
-        '[title*="clip" i]',
-    ]
-    for s in sels:
+COMPOSER_JS = """
+(args) => {
+  const box = args.box;
+  const out = [];
+  const seen = new Set();
+  const all = document.querySelectorAll('button,[role=button],svg,img,i,a,div,span,label');
+  for (const el of all) {
+    const r = el.getBoundingClientRect();
+    if (r.width < 12 || r.height < 12 || r.width > 80 || r.height > 80) continue;
+    const cy = r.y + r.height/2;
+    if (Math.abs(cy - args.cy) > 45) continue;
+    if (r.x < args.edge) continue;
+    if (el.querySelector('[contenteditable],input,textarea') || el.isContentEditable) continue;
+    const key = Math.round(r.x)+','+Math.round(r.y);
+    if (seen.has(key)) continue; seen.add(key);
+    out.push({x:r.x+r.width/2, y:cy, w:Math.round(r.width), tag:el.tagName,
+              cls:(el.getAttribute('class')||'').toString().slice(0,40),
+              lab:(el.getAttribute('aria-label')||el.getAttribute('title')||'').slice(0,30)});
+  }
+  return out;
+}
+"""
+
+MENU_WORDS = re.compile(r"photo|image|gallery|document|file|attach|media|picture", re.I)
+
+
+def composer_icons(page):
+    """Message box ki line me dikhne waale chhote icons (x, y, info)."""
+    box = find_message_box(page)
+    bb = None
+    try:
+        bb = box.bounding_box() if box is not None else None
+    except Exception:
+        bb = None
+    if not bb:
+        vh = page.evaluate("window.innerHeight")
+        bb = {"x": edge_x(page) + 200, "y": vh - 60, "width": 300, "height": 40}
+    try:
+        items = page.evaluate(COMPOSER_JS, {"cy": bb["y"] + bb["height"] / 2, "edge": edge_x(page),
+                                             "bx": bb["x"], "bw": bb["width"], "box": None})
+    except Exception:
+        return []
+    # left side pehle (paperclip aam taur par left me hota hai), phir right
+    items.sort(key=lambda d: (d["x"] > bb["x"], abs(d["x"] - bb["x"])))
+    return items
+
+
+def try_chooser(page, do_click, path, wait=2500):
+    try:
+        with page.expect_file_chooser(timeout=wait) as fc:
+            do_click()
+        fc.value.set_files(path)
+        return True
+    except Exception:
+        return False
+
+
+PASTE_JS = """async (a) => {
+  const bin = atob(a.b64); const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  const file = new File([arr], a.name, {type: a.mime});
+  const dt = new DataTransfer(); dt.items.add(file);
+  const t = document.activeElement || document.body;
+  const ev = new ClipboardEvent('paste', {clipboardData: dt, bubbles: true, cancelable: true});
+  t.dispatchEvent(ev);
+  return ev.defaultPrevented ? 'prevented' : 'dispatched';
+}"""
+
+DROP_JS = """async (a) => {
+  const bin = atob(a.b64); const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  const file = new File([arr], a.name, {type: a.mime});
+  const dt = new DataTransfer(); dt.items.add(file);
+  const x = a.x, y = a.y;
+  const t = document.elementFromPoint(x, y) || document.body;
+  for (const type of ['dragenter', 'dragover', 'drop']) {
+    t.dispatchEvent(new DragEvent(type, {dataTransfer: dt, bubbles: true, cancelable: true, clientX: x, clientY: y}));
+  }
+  return 'dropped on ' + t.tagName;
+}"""
+
+
+def _file_payload(path):
+    import base64, mimetypes
+    p = Path(path)
+    mime = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
+    return {"b64": base64.b64encode(p.read_bytes()).decode(), "name": p.name, "mime": mime}
+
+
+def upload_accepted(page, before_imgs):
+    """Paste/drop ke baad preview ya Send button dikha ya nahi."""
+    try:
+        btns = page.get_by_role("button", name=re.compile(r"^\s*send\s*$", re.I))
+        for i in range(btns.count()):
+            if btns.nth(i).is_visible():
+                return True
+    except Exception:
+        pass
+    try:
+        now = page.locator('img[src^="blob:"], img[src^="data:"]').count()
+        if now > before_imgs:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def paste_or_drop(page, path):
+    try:
+        payload = _file_payload(path)
+    except Exception:
+        return None
+    try:
+        before = page.locator('img[src^="blob:"], img[src^="data:"]').count()
+    except Exception:
+        before = 0
+    box = find_message_box(page)
+    if box is not None:
+        try:
+            box.click()
+            r = page.evaluate(PASTE_JS, payload)
+            page.wait_for_timeout(2000)
+            if upload_accepted(page, before):
+                return "paste (" + r + ")"
+        except Exception:
+            pass
+    try:
+        vw = page.evaluate("window.innerWidth"); vh = page.evaluate("window.innerHeight")
+        pt = dict(payload, x=(edge_x(page) + vw) / 2, y=vh / 2)
+        r = page.evaluate(DROP_JS, pt)
+        page.wait_for_timeout(2000)
+        if upload_accepted(page, before):
+            return "drop (" + r + ")"
+    except Exception:
+        pass
+    return None
+
+
+def attach_file(page, path):
+    """File attach karne ke tareeke. Mile to label return, nahi to None."""
+    # 1) seedha hidden file input
+    try:
+        inputs = page.locator('input[type="file"]')
+        n = inputs.count()
+        for i in range(n):
+            try:
+                inputs.nth(i).set_input_files(path, timeout=4000)
+                return f"hidden file input #{i}"
+            except Exception:
+                continue
+    except Exception:
+        pass
+    # 2) aria/title selectors
+    for s in ['[aria-label*="ttach" i]', '[title*="ttach" i]', '[aria-label*="clip" i]', '[title*="clip" i]']:
         loc = page.locator(s)
         try:
             n = loc.count()
         except Exception:
             n = 0
         for i in range(n):
-            yield f"selector {s}", (lambda l=loc.nth(i): l.click())
-    box = find_message_box(page)
-    if box is not None:
-        bb = box.bounding_box()
-        if bb:
-            cy = bb["y"] + bb["height"] / 2
-            for dx in (20, 32, 45):
-                yield f"box ke {dx}px bayein", (lambda x=bb["x"] - dx, y=cy: page.mouse.click(x, y))
+            if try_chooser(page, lambda l=loc.nth(i): l.click(), path):
+                return f"selector {s}"
+    # 2b) Ctrl+V jaisa paste, phir drag-drop
+    pd = paste_or_drop(page, path)
+    if pd:
+        return pd
+    # 3) composer line ke saare icons ek-ek
+    for ic in composer_icons(page)[:8]:
+        label = f"icon {ic['tag']} x={int(ic['x'])} {ic['lab'] or ic['cls']}"
+        if try_chooser(page, lambda ic=ic: page.mouse.click(ic["x"], ic["y"]), path, 1800):
+            return label
+        # icon ne menu khola ho sakta hai: Photo/Document wala item dabao
+        try:
+            page.wait_for_timeout(600)
+            for word in ("Document", "Photo", "File"):
+                m = page.get_by_text(re.compile(rf"^\s*{word}", re.I)).first
+                if m.count() and m.is_visible():
+                    if try_chooser(page, lambda m=m: m.click(), path, 2500):
+                        return label + f" -> menu '{word}'"
+        except Exception:
+            pass
+    return None
+
+
+def attach_diag(page):
+    ics = composer_icons(page)
+    inp = 0
+    try:
+        inp = page.locator('input[type="file"]').count()
+    except Exception:
+        pass
+    try:
+        vh = page.evaluate("window.innerHeight")
+        dump = page.evaluate('''([vh,vw]) => Array.from(document.querySelectorAll('*')).filter(e=>{const r=e.getBoundingClientRect();return r.width>5&&r.height>5&&r.width<700&&r.y>vh-130&&r.y<vh&&r.x>vw*0.25&&e.children.length<4}).slice(0,25).map(e=>{const r=e.getBoundingClientRect();return e.tagName+'|'+(e.getAttribute('class')||'').toString().slice(0,30)+'|'+(e.getAttribute('aria-label')||e.getAttribute('title')||e.getAttribute('data-testid')||'')+'|'+Math.round(r.x)+','+Math.round(r.y)+','+Math.round(r.width)}).join(' ;; ')''', [vh, page.evaluate('window.innerWidth')])
+        (SHOTS_DIR / "composer_dump.txt").write_text(dump, encoding="utf-8")
+    except Exception as ex:
+        dump = "dump fail " + repr(ex)[:80]
+    mb = find_message_box(page)
+    ic = str([(i['tag'], int(i['x']), int(i['y']), i['w'], i['lab'] or i['cls']) for i in ics[:8]])[:300]
+    return f"msgbox={'yes' if mb is not None else 'NO'} inputs={inp} icons={ic} DOM[{dump[:900]}]"
 
 
 def send_file(page, title, path):
-    chooser_ok = False
-    for label, do_click in find_attach_clicks(page):
-        try:
-            with page.expect_file_chooser(timeout=2500) as fc:
-                do_click()
-            fc.value.set_files(path)
-            print(f"   (attach button mila: {label})")
-            chooser_ok = True
-            break
-        except Exception:
-            continue
-    if not chooser_ok:
+    if not header_shows(page, title):
+        raise RuntimeError("chat khula nahi dikh raha (header me naam nahi) - file bhejne se pehle")
+    pre = attach_diag(page)   # click shuru karne se pehle ka haal
+    label = attach_file(page, path)
+    if not label:
         shot(page, title, "attach_not_found")
-        raise RuntimeError("attach (paperclip) button nahi mila")
+        still = "chat khula hai" if header_shows(page, title) else "chat BAND ho gaya"
+        raise RuntimeError("attach (paperclip) button nahi mila | " + still + " | " + pre)
+    print(f"   (attach: {label})")
 
     page.wait_for_timeout(2500)
     shot(page, title, "file_dialog")
