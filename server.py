@@ -11,6 +11,22 @@ from pathlib import Path
 import arattai_pilot as ap
 from playwright.sync_api import sync_playwright
 
+def _load_config():
+    """config.txt (server.py ke saath) se KEY=VALUE padhta hai. Env vars ko override nahi karta."""
+    f = Path(__file__).resolve().parent / "config.txt"
+    if not f.is_file():
+        return
+    for line in f.read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k, v = k.strip(), v.strip().strip('"').strip("'")
+        if k and v and k not in os.environ:
+            os.environ[k] = v
+
+
+_load_config()
 PORT = int(os.environ.get("PORT", 8765))
 TOKEN = os.environ.get("ACCESS_TOKEN", "").strip().strip('"').strip("'")   # cloud me zaroor set karein
 AUTOSTART = os.environ.get("AUTOSTART") == "1"
@@ -113,7 +129,13 @@ def scrape_chats(page):
         if (r.width && r.height && r.x < edge && r.y > 110 && r.y < innerHeight && t.length > 1 && t.length < 70 && !skip.test(t)) out.push([r.y, t]);
       }
       out.sort((a, b) => a[0] - b[0]);
-      return out.map(x => x[1]);
+      // rows: 28px se zyada gap = nayi row. Har row ki pehli (sabse upar wali) line = chat ka naam
+      const titles = []; let rowStart = -1000;
+      const junk = /^(image|video|audio|photo|document|you:?|[a-z]{1,2}:|conversation|chats? & contacts|public channels|frequent contacts|explore channels|hide|follow|typing.*|sticker|gif|location|contact|voice message|missed call|\\d+ (new )?messages?)$/i;
+      for (const [y, t] of out) {
+        if (y - rowStart > 28) { rowStart = y; if (!junk.test(t)) titles.push(t); }
+      }
+      return titles;
     }"""
     scroll = """(edge) => {
       let el = document.elementFromPoint(Math.min(edge * 0.5, 160), innerHeight * 0.6);
@@ -432,6 +454,18 @@ if __name__ == "__main__":
     if AUTOSTART: cmds.put({"cmd": "start"})   # redeploy ke baad saved login se khud khul jaye
     host = "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"
     srv = ThreadingHTTPServer((host, PORT), H)
+    ng_tok, ng_dom = os.environ.get("NGROK_AUTHTOKEN", ""), os.environ.get("NGROK_DOMAIN", "")
+    if ng_tok and ng_dom:
+        if not TOKEN:
+            print("!! NGROK ke liye config.txt me ACCESS_TOKEN (password) zaroori hai. Tunnel nahi khola gaya.")
+        else:
+            try:
+                from pyngrok import ngrok, conf
+                ngrok.set_auth_token(ng_tok)
+                t = ngrok.connect(PORT, "http", domain=ng_dom.replace("https://", "").strip("/"))
+                print(f"\n==== PERMANENT LINK: https://{ng_dom.replace('https://', '').strip('/')} ====\n")
+            except Exception as ex:
+                print("!! Tunnel nahi khula:", repr(ex)[:300], "- local link chalta rahega.")
     print(f"Dashboard: http://localhost:{PORT}  (band karne ke liye Ctrl+C)")
     try: srv.serve_forever()
     except KeyboardInterrupt: pass
