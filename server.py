@@ -8,8 +8,13 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import arattai_pilot as ap
-from playwright.sync_api import sync_playwright
+BACKEND = os.environ.get("BACKEND", "api").strip().lower()   # "api" (pyarattai, default) | "browser" (Playwright)
+if BACKEND == "browser":
+    import arattai_pilot as ap
+    from playwright.sync_api import sync_playwright
+else:
+    import arattai_api as ap
+    import arattai_api as ab
 
 def _load_config():
     """config.txt (server.py ke saath) se KEY=VALUE padhta hai. Env vars ko override nahi karta."""
@@ -30,13 +35,15 @@ _load_config()
 PORT = int(os.environ.get("PORT", 8765))
 TOKEN = os.environ.get("ACCESS_TOKEN", "").strip().strip('"').strip("'")   # cloud me zaroor set karein
 AUTOSTART = os.environ.get("AUTOSTART") == "1"
+if os.environ.get("CLOUD") == "1" and not TOKEN:
+    raise SystemExit("CLOUD mode me ACCESS_TOKEN zaroori hai (warna koi bhi aapke Arattai se bhej sakta hai).")
 SHOT = {"png": b""}
 ERR = {"png": b"", "ts": 0}
 BASE = Path(__file__).resolve().parent
 UP = ap.DATA / "uploads"; UP.mkdir(exist_ok=True)
 
 cmds = queue.Queue()
-S = {"state": "idle", "msg": "Browser band hai", "job": None, "log": [], "stop": False}
+S = {"state": "idle", "msg": "Browser band hai", "job": None, "log": [], "stop": False, "need": ""}
 LOCK = threading.Lock()
 
 
@@ -351,6 +358,78 @@ def worker():
             if "ev" in c: c["out"].append({"names": [], "debug": "error: " + repr(e)[:200]}); c["ev"].set()
 
 
+def api_worker():
+    """BACKEND=api: Playwright ke bina, pyarattai se. Commands: start/login/otp/send/chats/close."""
+    be = ab.Backend(log)
+    def need_login(msg):
+        S["need"] = "phone"; set_state("login", msg)
+    def wait(sec):
+        end = time.time() + sec
+        while time.time() < end and not S["stop"]:
+            time.sleep(0.25)
+    while True:
+        try:
+            c = cmds.get(timeout=20)
+        except queue.Empty:
+            if S["state"] == "ready" and not be.keepalive():
+                need_login("Session khatam - dobara login karein")
+            continue
+        try:
+            cmd = c["cmd"]
+            if cmd == "start":
+                if be.client:
+                    set_state("ready", "Taiyaar"); continue
+                set_state("starting", "Saved login check ho raha hai...")
+                if be.try_resume():
+                    S["need"] = ""; set_state("ready", "Taiyaar"); log("ok", "Arattai login (saved session)")
+                else:
+                    need_login("Arattai number daalein")
+            elif cmd == "login":
+                try:
+                    shown = be.begin_login(c["phone"], c["channel"])
+                    S["need"] = "otp"; set_state("login", "OTP bheja gaya: %s (Arattai app ya SMS dekhein)" % shown)
+                except Exception as e:
+                    log("err", "OTP nahi gaya: " + repr(e)[:160]); need_login("Number dobara daalein")
+            elif cmd == "otp":
+                ok, msg = be.finish_login(c["code"])
+                if ok:
+                    S["need"] = ""; set_state("ready", "Taiyaar"); log("ok", "Arattai login ho gaya")
+                else:
+                    log("err", msg); S["need"] = "otp"; set_state("login", msg)
+            elif cmd == "send" and be.client:
+                job = c["job"]
+                set_state("sending", "Bhej rahe hain...")
+                with LOCK:
+                    S["stop"] = False
+                try:
+                    ab.run_job(be, job, log, lambda: S["stop"], wait, random.uniform)
+                finally:
+                    for f in job["files"]:
+                        try: Path(f).unlink()
+                        except Exception: pass
+                    set_state("ready", "Taiyaar")
+            elif cmd == "chats" and be.client:
+                items = be.list_chats()
+                c["out"].append({"names": [i["title"] for i in items], "items": items, "debug": ""}); c["ev"].set()
+            elif cmd in ("shot", "click"):
+                c["ev"].set()                      # api mode me screenshot nahi hota
+            elif cmd == "logout":
+                try:
+                    (be.client or ab.ArattaiClient.from_session()).logout(True)
+                except Exception as e:
+                    log("warn", "server-side logout: " + repr(e)[:120])
+                be.disconnect(); S["need"] = ""; set_state("idle", "Logout ho gaya")
+            elif cmd == "close":
+                be.disconnect(); S["need"] = ""; set_state("idle", "Disconnect ho gaya (login saved hai)")
+        except Exception as e:
+            traceback.print_exc()
+            log("err", repr(e)[:200])
+            if S["state"] == "sending":
+                set_state("ready", "Taiyaar")
+            if "ev" in c:
+                c["out"].append({"names": [], "debug": "error: " + repr(e)[:200]}); c["ev"].set()
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
@@ -401,14 +480,15 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
         elif self.path == "/api/status":
             with LOCK:
-                self.send_json({"state": S["state"], "msg": S["msg"], "job": S["job"], "log": S["log"][-200:], "errts": ERR["ts"]})
+                self.send_json({"state": S["state"], "msg": S["msg"], "job": S["job"], "log": S["log"][-200:], "errts": ERR["ts"],
+                                "backend": BACKEND, "need": S["need"]})
         elif self.path == "/api/chats":
             if S["state"] != "ready":
                 return self.send_json({"error": "Pehle browser start/login karein"}, 400)
             c = {"cmd": "chats", "out": [], "ev": threading.Event()}
             cmds.put(c); c["ev"].wait(30)
             r = c["out"][0] if c["out"] and isinstance(c["out"][0], dict) else {"names": [], "debug": "(koi jawab nahi)"}
-            self.send_json({"chats": r["names"], "debug": r["debug"]})
+            self.send_json({"chats": r["names"], "items": r.get("items"), "debug": r["debug"]})
         else:
             self.send_json({"error": "not found"}, 404)
 
@@ -419,6 +499,19 @@ class H(BaseHTTPRequestHandler):
         d = json.loads(self.rfile.read(n) or b"{}")
         if self.path == "/api/start":
             cmds.put({"cmd": "start"}); self.send_json({"ok": True})
+        elif self.path == "/api/login" and BACKEND == "api":
+            try:
+                phone = ab.normalize_phone(d.get("phone", ""))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 400)
+            ch = d.get("channel") if d.get("channel") in ("app", "sms") else "app"
+            cmds.put({"cmd": "login", "phone": phone, "channel": ch}); self.send_json({"ok": True})
+        elif self.path == "/api/otp" and BACKEND == "api":
+            code = re.sub(r"\D", "", d.get("code", ""))
+            if not code: return self.send_json({"error": "OTP likhein"}, 400)
+            cmds.put({"cmd": "otp", "code": code}); self.send_json({"ok": True})
+        elif self.path == "/api/logout" and BACKEND == "api":
+            cmds.put({"cmd": "logout"}); self.send_json({"ok": True})
         elif self.path == "/api/close":
             cmds.put({"cmd": "close"}); self.send_json({"ok": True})
         elif self.path == "/api/click":
@@ -432,7 +525,8 @@ class H(BaseHTTPRequestHandler):
         elif self.path == "/api/send":
             if S["state"] != "ready":
                 return self.send_json({"error": "Abhi taiyaar nahi (state: %s)" % S["state"]}, 400)
-            chats = [c.strip() for c in d.get("chats", []) if c.strip()]
+            chats = [c if isinstance(c, dict) else c.strip() for c in d.get("chats", [])
+                     if (isinstance(c, dict) and c.get("title")) or (isinstance(c, str) and c.strip())]
             if not chats: return self.send_json({"error": "Koi chat nahi chuna"}, 400)
             files = []
             for f in d.get("files", []):
@@ -441,7 +535,8 @@ class H(BaseHTTPRequestHandler):
             if not files and not d.get("text", "").strip():
                 return self.send_json({"error": "Message ya file chahiye"}, 400)
             job = {"chats": chats, "text": d.get("text", ""), "files": files,
-                   "min": float(d.get("min", 8)), "max": float(d.get("max", 15)), "live": bool(d.get("live"))}
+                   "min": float(d.get("min", 8)), "max": float(d.get("max", 15)), "live": bool(d.get("live")),
+                   "caption": bool(d.get("caption"))}
             S["job"] = job
             cmds.put({"cmd": "send", "job": job})
             self.send_json({"ok": True})
@@ -450,9 +545,9 @@ class H(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    threading.Thread(target=worker, daemon=True).start()
+    threading.Thread(target=api_worker if BACKEND == "api" else worker, daemon=True).start()
     if AUTOSTART: cmds.put({"cmd": "start"})   # redeploy ke baad saved login se khud khul jaye
-    host = "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"
+    host = os.environ.get("BIND") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
     srv = ThreadingHTTPServer((host, PORT), H)
     ng_tok, ng_dom = os.environ.get("NGROK_AUTHTOKEN", ""), os.environ.get("NGROK_DOMAIN", "")
     if ng_tok and ng_dom:
