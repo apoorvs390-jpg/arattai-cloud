@@ -34,14 +34,25 @@ if os.environ.get("DATA_DIR"):
     os.environ["USERPROFILE"] = str(DATA)
 
 try:
+    import requests
     from pyarattai import ArattaiClient, Auth, Session
-    from pyarattai.constants import SESSION_FILE
+    from pyarattai import session as _ps
+    from pyarattai.constants import FILES_HEADERS, SESSION_FILE
     from pyarattai.errors import ArattaiError, AuthError, RateLimitError
 except ImportError:
     raise SystemExit("Pehle chalayein:  pip install irotechlab-pyarattai")
 
 SAFE_PREFIX = "Test"          # LIVE MODE off ho to sirf is naam se shuru hone wale chats allowed
 LOG_FILE = DATA / "arattai_log.csv"
+UP_STRATEGY_FILE = "~/.pyarattai/upload_strategy.json"
+STRATS = [{"sid": sid, "hdr": hdr, "csrf": csrf, "cookies": ck}
+          for ck in ("jar", "all") for hdr in ("browser", "minimal") for csrf in ("zchat", "none") for sid in ("a", "ws")]
+
+
+def strat_label(st):
+    return "sid={sid} hdr={hdr} csrf={csrf} cookies={cookies}".format(**st)
+
+
 MAX_FILE_MB = float(os.environ.get("MAX_FILE_MB", 120))
 
 
@@ -92,7 +103,9 @@ def explain(e):
     """Failure ka insaani reason (guess) + asli error."""
     m = str(e)
     low = m.lower()
-    if "http 401" in low or "http 403" in low:
+    if "upload http 401" in low or "upload http 403" in low:
+        hint = "Arattai file-server ne upload reject kiya (headers/cookies ka masla, chat permission nahi) - Connect page par 'Upload test' chalayein"
+    elif "http 401" in low or "http 403" in low:
         hint = "is chat me post karne ki permission nahi lagti (admin-only group/channel?) ya session expire"
     elif "http 404" in low:
         hint = "chat id nahi mila (group delete/left?) - list dobara laayein"
@@ -132,7 +145,11 @@ class Backend:
         self.client = None
         self._pending = None        # (Session, Auth, phone) OTP ke beech
         self._chats = []            # pyarattai Chat objects (cache)
-        self._up_mode = None        # upload ka kaunsa x-cliq-sid tareeka chala ("a" / "ws")
+        self._up_st = None          # upload ka jo tareeka chala (diagnose / pehli safal koshish se)
+        try:
+            self._up_st = json.loads(Path(os.path.expanduser(UP_STRATEGY_FILE)).read_text())
+        except Exception:
+            pass
         self._last_keepalive = time.time()
 
     # ------------------------------------------------------------ login
@@ -307,7 +324,7 @@ class Backend:
                 os.remove(f)
             except OSError:
                 pass
-        self._chats, self._up_mode, self._pending = [], None, None
+        self._chats, self._pending = [], None
         return err
 
     # ------------------------------------------------------------ chats
@@ -355,48 +372,95 @@ class Backend:
     def send_text(self, chat_id, text):
         return self.client.send(chat_id, text)
 
+    # ------------------------------------------------------------ upload
+    def _attempt(self, chat_id, name, data, mime, caption, st):
+        """Ek upload koshish, strategy `st` ke hisaab se. Response lautata hai."""
+        ts = int(time.time() * 1000)
+        sid = "a"
+        if st["sid"] == "ws":
+            sid = (self.client._fresh_ws_sid() or "") if hasattr(self.client, "_fresh_ws_sid") else ""
+        h = dict(FILES_HEADERS) if st["hdr"] == "browser" else {"User-Agent": FILES_HEADERS["User-Agent"]}
+        h.update({"x-cliq-content-type": mime, "Content-Type": mime,
+                  "x-cliq-comment": quote(caption) if caption else "",
+                  "upload-id": "{}_{}".format(chat_id, ts), "x-cliq-msgid": str(ts),
+                  "file-name": quote(name), "x-service": "arattai", "x-cliq-sid": sid,
+                  "x-client-time-utc": str(ts), "x-cliq-id": chat_id, "client-time": str(ts)})
+        if st["csrf"] == "zchat":
+            try:
+                h.update(self.client.s._zcsrf_header())
+            except Exception:
+                pass
+        url = _ps._BASE_MAP["files"].rstrip("/") + "/webupload"
+        jar = self.client.s.http.cookies
+        if st["cookies"] == "all":               # sab arattai cookies explicitly (host-only wali bhi)
+            ck = "; ".join("{}={}".format(c.name, c.value) for c in jar if "arattai.in" in (c.domain or ""))
+            if ck:
+                h["Cookie"] = ck
+            return requests.post(url, data=data, headers=h, timeout=300)
+        return self.client.s.http.post(url, data=data, headers=h, timeout=300)
+
+    @staticmethod
+    def _judge(resp):
+        body = (resp.text or "")[:300]
+        if resp.status_code == 429 or "request_limit_exceeded" in body:
+            raise RateLimitError("Arattai throttle: " + body[:100])
+        ok = 200 <= resp.status_code < 300
+        try:
+            j = resp.json()
+            if isinstance(j, dict) and (j.get("error") or str(j.get("code", "")).upper().startswith(("ERR", "IN"))):
+                ok = False
+        except ValueError:
+            pass
+        return ok, body
+
+    def _save_st(self):
+        try:
+            p = Path(UP_STRATEGY_FILE); p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(self._up_st))
+        except Exception:
+            pass
+
     def send_media(self, chat_id, path, caption=""):
         """Photo / video / document upload. Server ka jawab (chhota snippet) lautata hai."""
         p = Path(path)
         mime, _ = media_kind(p)
         data = p.read_bytes()                      # bytes: retry me bhi poori file jaati hai
-        modes = [self._up_mode] if self._up_mode else ["a", "ws"]
+        name = orig_name(p)
         last = "upload fail"
-        for mode in modes:
-            ts = int(time.time() * 1000)
-            sid = "a"
-            if mode == "ws":
-                sid = (self.client._fresh_ws_sid() or "") if hasattr(self.client, "_fresh_ws_sid") else ""
-            headers = {
-                "x-cliq-content-type": mime, "Content-Type": mime,
-                "x-cliq-comment": quote(caption) if caption else "",
-                "upload-id": "{}_{}".format(chat_id, ts), "x-cliq-msgid": str(ts),
-                "file-name": quote(orig_name(p)), "x-service": "arattai", "x-cliq-sid": sid,
-                "x-client-time-utc": str(ts), "x-cliq-id": chat_id,
-            }
-            try:
-                headers.update(self.client.s._zcsrf_header())
-            except Exception:
-                pass
-            resp = self.client.s.request("POST", "/webupload", base="files", raw=True,
-                                         data=data, headers=headers, timeout=300)
-            body = (resp.text or "")[:300]
-            if resp.status_code == 429 or "request_limit_exceeded" in body:
-                raise RateLimitError("Arattai throttle: " + body[:100])
-            ok = 200 <= resp.status_code < 300
-            try:
-                j = resp.json()
-                if isinstance(j, dict) and (j.get("error") or str(j.get("code", "")).upper().startswith(("ERR", "IN"))):
-                    ok = False
-            except ValueError:
-                pass
+        for st in ([self._up_st] if self._up_st else STRATS[:2]):
+            resp = self._attempt(chat_id, name, data, mime, caption, st)
+            ok, body = self._judge(resp)
             if ok:
-                if self._up_mode != mode:
-                    self.log("info", "upload tareeka '{}' chala; server jawab: {}".format(mode, body[:120]))
-                self._up_mode = mode
+                if self._up_st != st:
+                    self.log("info", "upload tareeka {} chala; server jawab: {}".format(strat_label(st), body[:120]))
+                self._up_st = st
+                self._save_st()
                 return body
             last = "upload HTTP {} {}".format(resp.status_code, body[:150])
         raise ArattaiError(last)
+
+    def diagnose_upload(self, chat_id):
+        """Chhoti test file se saare upload tareeke aazmao; jo chale use yaad rakho. Poori report log me."""
+        cks = sorted({"{}@{}".format(c.name, c.domain) for c in self.client.s.http.cookies})
+        self.log("info", "Cookies (naam@domain): " + ", ".join(cks)[:700])
+        shown = False
+        for i, st in enumerate(STRATS, 1):
+            try:
+                resp = self._attempt(chat_id, "upload-test.txt", b"Arattai tool upload test", "text/plain", "", st)
+                ok, body = self._judge(resp)
+            except Exception as e:
+                self.log("err", "#{} {} -> {!r}".format(i, strat_label(st), e)[:300]); continue
+            self.log("ok" if ok else "warn", "#{} {} -> HTTP {} {}".format(i, strat_label(st), resp.status_code, body[:100]))
+            if ok:
+                self._up_st = st
+                self._save_st()
+                self.log("ok", "Upload tareeka mil gaya aur yaad kar liya. Test chat me 'upload-test.txt' dikhni chahiye - dikhe to ab broadcast chalayein.")
+                return True
+            if not shown:
+                shown = True
+                self.log("info", "Server ke response headers: " + ", ".join("{}: {}".format(k, v[:50]) for k, v in resp.headers.items())[:500])
+        self.log("err", "Koi bhi upload tareeka nahi chala - upar ki saari lines copy karke bhejein.")
+        return False
 
 
 # ---------------------------------------------------------------- bulk job
