@@ -46,8 +46,9 @@ except ImportError:
 SAFE_PREFIX = "Test"          # LIVE MODE off ho to sirf is naam se shuru hone wale chats allowed
 LOG_FILE = DATA / "arattai_log.csv"
 UP_STRATEGY_FILE = "~/.pyarattai/upload_strategy.json"
-STRATS = [{"sid": sid, "hdr": hdr, "csrf": csrf, "cookies": ck}
-          for ck in ("jar", "all") for hdr in ("browser", "minimal") for csrf in ("zchat", "none") for sid in ("a", "ws")]
+STRATS = [{"sid": sid, "hdr": hdr, "csrf": csrf, "cookies": ck, "ctype": ct}
+          for ct in ("mime", "octet") for ck in ("jar", "all") for hdr in ("browser", "minimal")
+          for csrf in ("zchat", "none") for sid in ("a", "ws")]
 
 
 UPLOAD_TIMEOUT = float(os.environ.get("UPLOAD_TIMEOUT", 300))   # har data-block/jawab ka intezaar (poori file ka nahi)
@@ -72,7 +73,7 @@ class _Body:
 
 
 def strat_label(st):
-    return "sid={sid} hdr={hdr} csrf={csrf} cookies={cookies}".format(**st)
+    return "sid={sid} hdr={hdr} csrf={csrf} cookies={cookies} ct={ctype}".format(**{"ctype": "mime", **st})
 
 
 MAX_FILE_MB = float(os.environ.get("MAX_FILE_MB", 120))
@@ -404,7 +405,8 @@ class Backend:
         if st["sid"] == "ws":
             sid = (self.client._fresh_ws_sid() or "") if hasattr(self.client, "_fresh_ws_sid") else ""
         h = dict(FILES_HEADERS) if st["hdr"] == "browser" else {"User-Agent": FILES_HEADERS["User-Agent"]}
-        h.update({"x-cliq-content-type": mime, "Content-Type": mime,
+        h.update({"x-cliq-content-type": mime,
+                  "Content-Type": "application/octet-stream" if st.get("ctype") == "octet" else mime,
                   "x-cliq-comment": quote(caption) if caption else "",
                   "upload-id": "{}_{}".format(chat_id, ts), "x-cliq-msgid": str(ts),
                   "file-name": quote(name), "x-service": "arattai", "x-cliq-sid": sid,
@@ -512,7 +514,7 @@ def run_job(be, job, log, stopped, wait, rng):
         log("warn", "Caption me non-ASCII (Hindi) text hai - caption mode band, text alag message me jayega")
 
     be.list_chats()                                  # taaza chat list (naam -> id)
-    seen, consec = set(), 0
+    seen, consec, diag_done = set(), 0, False
     for i, rec in enumerate(chats, 1):
         if stopped():
             log("warn", "Stop dabaya gaya, ruk gaye.")
@@ -550,6 +552,12 @@ def run_job(be, job, log, stopped, wait, rng):
                         log("warn", "Arattai ne throttle kiya, {}s ruk kar dobara try".format(RATE_PAUSE_SEC))
                         wait(RATE_PAUSE_SEC)
                     except Exception as ex:               # network/5xx: 2 baar aur koshish; 4xx permanent
+                        if (kind == "file" and not diag_done and be._up_st is None and label.startswith(SAFE_PREFIX)
+                                and re.search(r"upload http 40[13]", str(ex).lower())):
+                            diag_done = True              # Test chat me hi: chhoti test file se sahi tareeka dhoondho
+                            log("warn", "{}: upload reject hua - auto 'Upload test' chal raha hai (Test chat me ek chhoti test file jayegi)".format(label))
+                            if be.diagnose_upload(chat["id"]):
+                                continue
                         slow = kind == "file" and "timed out" in str(ex).lower()
                         if attempt >= (2 if slow else 3) or re.search(r"HTTP 4\d\d", str(ex)):
                             raise
