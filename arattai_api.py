@@ -15,10 +15,15 @@ import mimetypes
 import os
 import re
 import stat
+import threading
 import time
+import unicodedata
+from difflib import get_close_matches
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
+
+import requests
 
 BASE = Path(__file__).resolve().parent
 DATA = Path(os.environ.get("DATA_DIR", BASE))
@@ -41,6 +46,7 @@ MAX_FILE_MB = float(os.environ.get("MAX_FILE_MB", 64))
 KEEPALIVE_SEC = 600
 RATE_PAUSE_SEC = 60
 MAX_CONSEC_FAIL = 5
+QR_AUTH, QR_WEB = "https://accounts.arattai.in", "https://web.arattai.in"
 
 
 def write_log(rows):
@@ -68,6 +74,32 @@ def normalize_phone(raw):
     if len(d) >= 11:
         return d[:-10] + "-" + d[-10:]
     raise ValueError("Number galat lag raha hai (10 digit, ya 91 ke saath)")
+
+
+def norm(t):
+    """Naam compare ke liye: emoji/zero-width/extra space hatao, casefold."""
+    t = unicodedata.normalize("NFKC", t or "")
+    t = "".join(ch for ch in t if unicodedata.category(ch)[0] in "LNZ" or ch in "-_&.")
+    return re.sub(r"\s+", " ", t).strip().casefold()
+
+
+def explain(e):
+    """Failure ka insaani reason (guess) + asli error."""
+    m = str(e)
+    low = m.lower()
+    if "http 401" in low or "http 403" in low:
+        hint = "is chat me post karne ki permission nahi lagti (admin-only group/channel?) ya session expire"
+    elif "http 404" in low:
+        hint = "chat id nahi mila (group delete/left?) - list dobara laayein"
+    elif "http 413" in low:
+        hint = "file bahut badi"
+    elif "e2ee" in low or "signal" in low:
+        hint = "encrypted chat - library is chat me nahi bhej sakti"
+    elif "timeout" in low or "timed out" in low or "connection" in low:
+        hint = "network/timeout - dobara try karein"
+    else:
+        hint = ""
+    return (hint + " | " if hint else "") + m[:160]
 
 
 def persist_session(client, path=SESSION_FILE):
@@ -156,6 +188,84 @@ class Backend:
         except Exception as e:
             self.log("warn", "Signal setup nahi hua (DM text E2EE nahi chalega): " + repr(e)[:150])
 
+    # ------------------------------------------------------------ QR login
+    def qr_begin(self, on_update):
+        """Arattai app > Linked devices se scan. Background thread; on_update({state,svg,msg})."""
+        self.qr_stop()
+        self._qr_stop = threading.Event()
+        threading.Thread(target=self._qr_loop, args=(on_update, self._qr_stop), daemon=True).start()
+
+    def qr_stop(self):
+        ev = getattr(self, "_qr_stop", None)
+        if ev:
+            ev.set()
+
+    def _qr_loop(self, on_update, stop):
+        import segno
+        AUTH, WEB = QR_AUTH, QR_WEB
+        QR_URL = AUTH + "/signin/v2/qrcode"
+        UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"}
+        s = Session()
+        http, deadline, fails = s.http, time.time() + 600, 0
+        body = '{"qrcodeauth":{"remember":true}}'
+
+        def fresh():
+            http.get(AUTH, headers=UA, timeout=20)
+            http.get(AUTH + "/signin", params={"QRLogin": True, "servicename": "Arattai", "serviceurl": WEB}, headers=UA, timeout=20)
+            cli = int(time.time() * 1000)
+            csr = s._find_cookie("iamcsr")
+            r = http.post(QR_URL, params={"cli_time": cli, "servicename": "Arattai", "serviceurl": WEB}, data=body,
+                          headers=dict(UA, **{"X-ZCSRF-TOKEN": "iamcsrcoo=" + (csr or "")}), timeout=20)
+            q = r.json()["qrcodeauth"]
+            if not q.get("token"):
+                raise RuntimeError("QR token nahi mila: " + r.text[:100])
+            svg = segno.make(q["oneauth_url"], error="m").svg_data_uri(scale=6, border=2)
+            on_update({"state": "pending", "svg": svg, "msg": "Arattai app > Linked devices > Scan QR"})
+            return cli, q["token"]
+
+        cli = tok = None
+        while not stop.is_set() and time.time() < deadline:
+            try:
+                if not tok:
+                    cli, tok = fresh()
+                r = http.put(QR_URL, params={"cli_time": cli, "servicename": "AaaServer", "serviceurl": WEB}, data=body,
+                             headers=dict(UA, **{"Z-Authorization": "Zoho-ticket " + tok,
+                                                 "X-ZCSRF-TOKEN": "iamcsrcoo=" + (s._find_cookie("iamcsr") or "")}), timeout=20)
+                code = r.json().get("status_code")
+                fails = 0
+                if code == 200:
+                    on_update({"state": "finishing", "svg": "", "msg": "Scan ho gaya, login complete ho raha hai..."})
+                    self._finish_qr(s)
+                    on_update({"state": "ready", "svg": "", "msg": "ok"})
+                    return
+                if code == 401:                       # QR expire -> naya
+                    tok = None
+                    continue
+            except Exception as e:
+                fails += 1
+                tok = tok if fails < 3 else None
+                if fails >= 6:
+                    on_update({"state": "error", "svg": "", "msg": "QR login fail: " + repr(e)[:150]})
+                    return
+            stop.wait(3)
+        if not stop.is_set():
+            on_update({"state": "error", "svg": "", "msg": "QR expire ho gaya - dobara QR dikhao"})
+
+    def _finish_qr(self, s):
+        a = Auth(s)
+        a.establish_chat_session()
+        a.mint_x_tkp_token()
+        a.fetch_session_meta()
+        if not a.uid:
+            a.uid = a.identifier or s._find_cookie("zuid")
+        a.save(SESSION_FILE)
+        client = ArattaiClient(s, {"uid": a.uid, "mobile": a.mobile, "device_id": a.device_id,
+                                   "registration_id": a.registration_id, "session_id": a.session_id})
+        client.get_chats(limit=1)                      # sach me login hua ya nahi
+        self._register_signal(client)
+        persist_session(client)
+        self.client, self._pending = client, None
+
     def keepalive(self):
         """Idle me session zinda rakhna + cookies save. False = session mar gaya."""
         if not self.client or time.time() - self._last_keepalive < KEEPALIVE_SEC:
@@ -170,6 +280,7 @@ class Backend:
             return False
 
     def disconnect(self):
+        self.qr_stop()
         self.client = self._pending = None
 
     # ------------------------------------------------------------ chats
@@ -182,25 +293,35 @@ class Backend:
             if not title:
                 continue
             kind = "group" if c.is_group else ("contact" if c.is_e2ee else "other")
-            out.append({"id": c.id, "title": title, "kind": kind, "e2ee": bool(c.is_e2ee)})
+            out.append({"id": c.id, "title": title, "kind": kind, "e2ee": bool(c.is_e2ee),
+                        "n": c.pcount or c.participants_count or 0, "admin": bool(c.is_admin)})
         return out
 
     def resolve(self, rec):
         """rec: {'id','title'} ya sirf naam (str). -> (chat_dict, error)"""
-        items = {i["id"]: i for i in self._items()}
+        items = self._items()
+        by_id = {i["id"]: i for i in items}
         if isinstance(rec, dict) and rec.get("id"):
-            it = items.get(rec["id"])
+            it = by_id.get(rec["id"])
             return (it, "") if it else (None, "chat id list me nahi mila (list dobara laayein)")
-        name = (rec["title"] if isinstance(rec, dict) else str(rec)).strip().casefold()
-        hits = [i for i in items.values() if i["title"].casefold() == name]
+        want = norm(rec["title"] if isinstance(rec, dict) else str(rec))
+        if not want:
+            return None, "naam khaali hai"
+        hits = [i for i in items if norm(i["title"]) == want]
+        if not hits:                                   # chhota fark (emoji/space) maaf, par sirf unique match
+            hits = [i for i in items if want in norm(i["title"]) or norm(i["title"]) in want and len(norm(i["title"])) > 3]
+            if len(hits) != 1:
+                close = get_close_matches(want, [norm(i["title"]) for i in items], n=2, cutoff=0.92)
+                hits = [i for i in items if norm(i["title"]) == close[0]] if len(close) == 1 else []
         if len(hits) == 1:
             return hits[0], ""
         if not hits:
-            return None, "is naam ka chat nahi mila"
-        return None, "{} chats ka naam same hai - 'list se' chun kar add karein".format(len(hits))
+            return None, "is naam ka chat nahi mila (Groups/Contacts page se chunein)"
+        return None, "{} chats ka naam same hai - Groups page se chun kar add karein".format(len(hits))
 
     def _items(self):
-        return [{"id": c.id, "title": (c.title or "").strip(), "kind": "group" if c.is_group else "contact",
+        return [{"id": c.id, "title": (c.title or (c.raw or {}).get("name") or "").strip(),
+                 "kind": "group" if c.is_group else ("contact" if c.is_e2ee else "other"),
                  "e2ee": bool(c.is_e2ee)} for c in self._chats]
 
     # ------------------------------------------------------------ sending
@@ -258,6 +379,7 @@ def run_job(be, job, log, stopped, wait, rng):
     lo, hi, live = job["min"], job["max"], job["live"]
     job["total"] = len(chats)
     job["done"] = job["ok"] = job["fail"] = 0
+    job["failed"] = []
 
     for f in files:                                  # bhejne se pehle size check
         mb = Path(f).stat().st_size / 1048576
@@ -292,7 +414,7 @@ def run_job(be, job, log, stopped, wait, rng):
             if text.strip() and not cap_ok:
                 parts.append(("text", text, ""))
             for kind, arg, cap in parts:
-                for attempt in (1, 2):
+                for attempt in (1, 2, 3):
                     try:
                         if kind == "file":
                             be.send_media(chat["id"], arg, cap)
@@ -302,20 +424,29 @@ def run_job(be, job, log, stopped, wait, rng):
                             be.send_text(chat["id"], arg)
                         break
                     except RateLimitError:
-                        if attempt == 2:
+                        if attempt >= 2:
                             job["abort"] = True
                             raise
                         log("warn", "Arattai ne throttle kiya, {}s ruk kar dobara try".format(RATE_PAUSE_SEC))
                         wait(RATE_PAUSE_SEC)
+                    except Exception as ex:               # network/5xx: 2 baar aur koshish; 4xx permanent
+                        if attempt >= 3 or re.search(r"HTTP 4\d\d", str(ex)):
+                            raise
+                        log("warn", "{}: dobara koshish ({}/3)".format(label, attempt))
+                        wait(4 * attempt)
                 done_parts += 1
             job["ok"] += 1
             consec = 0
             flag = " (E2EE-type chat: server ne file accept ki)" if (files and chat["e2ee"]) else ""
             log("ok", "{}: bheja{}".format(label, flag))
         except Exception as e:
-            status, note = "FAIL", repr(e)[:200]
+            note = explain(e)
+            status = "FAIL"
             if done_parts:
-                status = "PARTIAL"
+                status = "PARTIAL"           # kuch parts ja chuke - retry list me nahi (duplicate file na jaye)
+                note += " (kuch parts chale gaye)"
+            else:
+                job["failed"].append({"rec": rec, "title": label, "reason": note})
             job["fail"] += 1
             consec += 1
             log("err", "{}: {}".format(label, note))
