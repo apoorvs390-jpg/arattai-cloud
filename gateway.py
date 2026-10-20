@@ -24,7 +24,7 @@ MAX_BODY = int(float(os.environ.get("MAX_BODY_MB", 150)) * 1048576)
 NODE_SHARED = os.environ.get("NODE_SHARED", "/opt/pya/node_modules")
 INTERNAL = secrets.token_hex(16)                 # gateway <-> worker ka gupt token
 UID_RE = re.compile(r"^[a-f0-9]{32,64}$")
-ACTIONS = {"status", "chats", "start", "close", "login", "otp", "send", "stop", "logout"}
+ACTIONS = {"status", "chats", "start", "close", "login", "otp", "send", "stop", "logout", "qr"}
 IDLE_STATUS = {"state": "idle", "msg": "Disconnect hai - Connect dabayein (login saved hai)", "job": None,
                "log": [], "errts": 0, "backend": "api", "need": ""}
 W, LOCK = {}, threading.Lock()
