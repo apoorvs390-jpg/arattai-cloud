@@ -43,7 +43,9 @@ button.p{background:var(--y);border-color:var(--y);font-weight:700;color:#3b2c00
 <div class="g2"><div class="col"><div class="c"><h3>Server</h3>
 <label class="l">Invite code / Access token</label><div class="row"><input type="password" id="tok" style="flex:1"><button onclick="saveTok()">Save</button></div>
 <label class="l" style="margin-top:8px">Server URL (khaali = yahi site)</label><input type="text" id="api" placeholder="https://...">
-<div class="row" style="margin-top:12px"><button class="p" onclick="act('start')">Connect / Login</button><button onclick="act('close')">Disconnect</button><button class="d" onclick="logout()">Logout</button><button onclick="forgetMe()">Logout + data delete</button></div></div></div>
+<div class="row" style="margin-top:12px"><button class="p" onclick="act('start')">Connect / Login</button><button onclick="act('close')">Disconnect</button><button class="d" onclick="logout()">Logout</button><button onclick="forgetMe()">Logout + data delete</button></div></div>
+<div class="c"><h3>Upload test</h3><div class="mu" style="margin-bottom:8px">Photo/video/document na jaye (HTTP 403) to yahan se test karein. Ek chhoti test file aapke "Test" chat me jayegi; sahi tareeka mil jaye to tool yaad rakhta hai.</div>
+<div class="row"><input type="text" id="dg" placeholder='Test chat ka naam, jaise: Test 1' style="flex:1"><button class="p" onclick="diag()">Upload test chalao</button></div></div></div>
 <div class="col" id="lgBox"><div class="c"><h3>Login by QR</h3><div id="qrArea" class="mu">Phone me Arattai &gt; Linked devices &gt; Link a device, phir QR scan karein.</div><p><button class="p" onclick="act('qr')">QR dikhao</button></p></div>
 <div class="c"><h3>Login by phone number</h3><div id="phRow" class="row"><input type="text" id="ph" placeholder="10 digit number" style="flex:1" inputmode="tel"><select id="och" style="width:auto"><option value="app">App OTP</option><option value="sms">SMS OTP</option></select><button class="p" onclick="sendOtp()">OTP bhejo</button></div>
 <div id="otpRow" class="row" style="display:none"><input type="text" id="otp" placeholder="OTP" style="flex:1" inputmode="numeric"><button class="p" onclick="verOtp()">Verify</button></div></div></div></div></section>
@@ -85,6 +87,7 @@ async function logout(){if(!confirm('Logout karein?\nAapka Arattai login hat jay
  const r=await call('logout',{});if(r.error)return alert(r.error);
  lockUntil=Date.now()+10000;recips=[];saveR();renderR();chats=[];loaded=false;sel.groups.clear();sel.contacts.clear();lastFailed=[];files=[];renderF();$('text').value='';
  ['nG','nC'].forEach(i=>$(i).textContent='0');['groups','contacts'].forEach(renderList);$('qrArea').innerHTML='<p class="mu">QR ban raha hai...</p>';show('connect');poll()}
+async function diag(){const r=await call('diag',{chat:$('dg').value});if(r.error)return alert(r.error);show('bc');poll()}
 async function forgetMe(){if(!confirm('Arattai se logout hoga aur server se aapka saara data delete hoga. Pakka?'))return;const r=await call('forget',{});alert(r.error||'Data delete ho gaya.');location.reload()}
 function renderR(){$('added').textContent=recips.length;$('tags').innerHTML=recips.map((n,i)=>`<span class="tag">${esc(lbl(n))}<b onclick="recips.splice(${i},1);saveR();renderR()">&times;</b></span>`).join('')}
 function addRec(x){if(typeof x==='string'){if(!recips.some(r=>lbl(r)===x))recips.push(x)}else if(!recips.some(r=>r.id===x.id))recips.push({id:x.id,title:x.title})}
