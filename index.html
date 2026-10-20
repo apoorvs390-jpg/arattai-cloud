@@ -1,135 +1,129 @@
-<!doctype html>
-<html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Arattai Dissemination</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arattai Dissemination Tool</title>
 <style>
-:root{--bg:#f4f6f8;--card:#fff;--tx:#1b2430;--mu:#6b7785;--ac:#0b7d4f;--bd:#dde3ea;--er:#c0392b;--wa:#b36b00}
-@media(prefers-color-scheme:dark){:root{--bg:#12161b;--card:#1b2128;--tx:#e8edf2;--mu:#8b97a5;--bd:#2c353f}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px system-ui,sans-serif}
-.w{max-width:900px;margin:0 auto;padding:16px}
-.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:14px}
-h1{font-size:20px;margin:0 0 12px}h2{font-size:15px;margin:0 0 10px}
-button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer}
-button.s{background:transparent;color:var(--tx);border:1px solid var(--bd)}button.r{background:var(--er)}button:disabled{opacity:.5;cursor:default}
-input,textarea{width:100%;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:9px;font:inherit}
-textarea{min-height:110px;resize:vertical}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.row>*{flex:0 0 auto}.row input{flex:1 1 140px}
-.pill{display:inline-block;padding:3px 10px;border-radius:99px;background:var(--bd);font-size:13px}
-.pill.ok{background:var(--ac);color:#fff}.pill.wk{background:var(--wa);color:#fff}
-.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.tag{background:var(--bg);border:1px solid var(--bd);border-radius:99px;padding:4px 6px 4px 12px;font-size:13px}
-.tag b{cursor:pointer;margin-left:6px;color:var(--mu)}
-.mu{color:var(--mu);font-size:13px}.bar{height:8px;background:var(--bd);border-radius:9px;overflow:hidden;margin:10px 0}
-.bar i{display:block;height:100%;background:var(--ac);width:0}
-#log{max-height:260px;overflow:auto;font:13px ui-monospace,monospace}
-.ok{color:var(--ac)}.err{color:var(--er)}.warn{color:var(--wa)}
-.files{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.f{border:1px solid var(--bd);border-radius:8px;padding:6px 8px;font-size:12px}
-.f img{display:block;max-height:60px;margin-bottom:4px}
-.lv{border:1px solid var(--wa);background:rgba(179,107,0,.1);border-radius:8px;padding:10px;margin-top:10px}
-</style></head><body><div class="w">
-<h1>Arattai Dissemination</h1>
-<div id="nosrv" class="c lv" style="display:none"><b>Is PC par tool ka server nahi chal raha.</b><br>
-Sending hamesha usi PC se hoti hai jispar ye page khula hai. Ek baar: <a id="dl" href="#">tool ka ZIP download karein</a>, unzip karein, <b>start.bat</b> chalayein (Python chahiye), phir ye page refresh karein. Har PC/vyakti ka apna Arattai login hoga.</div>
+:root{--y:#f5c400;--yd:#7a5a00;--bg:#fffdf3;--bd:#f1e4a9;--tx:#2b2200;--mu:#7d7556}
+*{box-sizing:border-box}body{margin:0;display:flex;height:100vh;font:13px/1.4 system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--tx)}
+aside{width:200px;background:#fff;border-right:1px solid var(--bd);display:flex;flex-direction:column;flex:none}
+.brand{padding:16px 18px 12px;border-bottom:3px solid var(--y)}.brand b{font-size:17px;color:var(--yd);display:block}.brand small{font-size:10px;color:#5b4a00}
+nav{padding-top:14px;flex:1}nav a{display:block;padding:11px 18px;color:#4a3f10;cursor:pointer;text-decoration:none}nav a.on{background:#fff3c4;border-left:3px solid var(--y);padding-left:15px}
+.sf{padding:10px 18px;border-top:1px solid var(--bd);font-size:11px;color:var(--mu)}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#bbb;margin-right:6px}
+main{flex:1;overflow:auto;padding:20px 22px}h1{margin:0;font-size:18px}.sub{color:var(--mu);margin:2px 0 14px}
+.ban{background:#fff6cc;border:1px solid #f0d56a;border-radius:6px;padding:9px 13px;margin-bottom:14px;font-size:12px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}.col>*+*{margin-top:14px}
+.c{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:16px}.c h3{margin:0 0 10px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--yd)}
+label.l{display:block;font-size:12px;color:var(--mu);margin:2px 0 4px}
+input[type=text],input[type=number],input[type=password],textarea,select{width:100%;border:1px solid #eadfa6;border-radius:6px;padding:9px;font:inherit;background:#fff;color:inherit}
+textarea{resize:vertical;min-height:70px}button{font:inherit;border:1px solid #eadfa6;background:#fff;border-radius:6px;padding:7px 12px;cursor:pointer;color:var(--tx)}
+button.p{background:var(--y);border-color:var(--y);font-weight:700;color:#3b2c00}button.d{background:#dc2626;border-color:#dc2626;color:#fff;font-weight:700}button:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row.sp{justify-content:space-between}.mu{color:var(--mu);font-size:12px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;border:1px solid var(--bd);border-radius:6px;padding:8px;min-height:44px;margin-top:8px}
+.tag{background:#fff3c4;border:1px solid #f0d56a;border-radius:14px;padding:3px 10px;font-size:12px}.tag b{cursor:pointer;margin-left:5px;color:#8a6d00}
+.live{background:#fff3c4;border:1px solid #f0d56a;border-radius:6px;padding:10px;margin-top:10px;font-size:14px}.live input{margin-right:6px}
+.drop{border:2px dashed #f0d56a;border-radius:8px;padding:26px 10px;text-align:center;cursor:pointer;background:#fffbe6}.drop small{display:block;color:var(--mu);font-size:10px}
+.files{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.f{border:1px solid var(--bd);border-radius:6px;padding:6px;font-size:11px;max-width:120px}.f img,.f .ic{width:44px;height:50px;object-fit:cover;display:flex;align-items:center;justify-content:center;background:#fff3c4;font-weight:700;margin-bottom:4px}.f b{cursor:pointer}
+.bar{height:5px;background:var(--bd);border-radius:3px;margin:12px 0}.bar i{display:block;height:100%;background:var(--y);border-radius:3px;width:0}
+.st{display:grid;grid-template-columns:1fr 1fr;gap:12px}.st div{border:2px solid var(--y);border-radius:10px;text-align:center;padding:10px}.st b{display:block;font-size:20px}
+#log{height:190px;overflow:auto;border:1px solid var(--bd);border-radius:6px;padding:6px 8px;margin-top:12px;font:11px/1.5 Consolas,monospace;background:#fff}
+.ok{color:#0a7d2c}.err{color:#c0262d}.warn{color:#b26a00}.info{color:#666}
+.li{display:flex;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid #f6efc9;cursor:pointer}.li .nm{flex:1}
+.fl{margin-top:10px;font-size:12px;border:1px solid #f3c6c6;background:#fff5f5;border-radius:6px;padding:8px}.fl div{padding:2px 0}
+.big{font-size:22px;font-weight:700}.pg{display:none}.pg.on{display:block}
+</style></head><body>
+<aside><div class="brand"><b>Arattai</b><small>Dissemination Tool</small></div>
+<nav><a data-p="dash">Dashboard</a><a data-p="connect">Connect Arattai</a><a data-p="bc">Broadcast</a><a data-p="groups">Groups</a><a data-p="contacts">Contacts</a></nav>
+<div class="sf"><span class="dot" id="dot"></span><span id="stl">...</span></div><div class="sf" style="border:0;padding-top:0">Arattai v1.0</div></aside>
+<main>
 
-<div class="c"><h2>1. Arattai se connect</h2>
- <div class="row"><button id="bStart" onclick="api('start')">Connect / Login</button>
- <button class="s" onclick="api('close')">Disconnect</button><button class="s" onclick="forgetMe()">Logout + mera data delete</button>
- <span id="st" class="pill">...</span><span id="stm" class="mu"></span></div>
- <div class="row" style="margin-top:10px"><input id="apiu" placeholder="Server URL (cloud: https://xxx.up.railway.app, khaali = yahi PC)"><input id="tok" type="password" placeholder="Invite code (jo aapko diya gaya)"><button class="s" onclick="svTok()">Save</button></div>
- <div id="apiBox" style="display:none;margin-top:10px">
-  <div id="phRow" class="row" style="display:none"><input id="ph" placeholder="Arattai number (10 digit, ya 91-XXXXXXXXXX)" inputmode="tel">
-   <select id="och" style="width:auto;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:9px"><option value="app">App me OTP</option><option value="sms">SMS OTP</option></select>
-   <button onclick="sendOtp()">OTP bhejo</button></div>
-  <div id="otpRow" class="row" style="display:none"><input id="otp" placeholder="6 digit OTP" inputmode="numeric"><button onclick="verOtp()">Verify</button><button class="s" onclick="api('start')">Number badlo</button></div>
-  <p class="mu">Login ek baar: baad me saved rehta hai. (DM text ke liye server par Node.js chahiye; groups/files par asar nahi.)</p></div>
-<div id="brBox"><div id="qrbox" style="display:none;margin-top:10px"><b>Arattai app se ye QR scan karein</b> <span class='mu'>(laptop screen par dekhein, phone ki brightness full rakhein; QR badalta rehta hai, jaldi scan karein)</span>:<br><img id="qr" style="width:min(100%,420px);image-rendering:pixelated;background:#fff;padding:12px;border:1px solid var(--bd);border-radius:8px;margin-top:6px"></div>
- <div class="row" style="margin-top:8px"><button class="s" onclick="live()">Browser ka live screenshot dekho</button></div><div id="lvh" class="mu" style="display:none;margin-top:8px">Tasveer par click karne se wahi click cloud browser me hoga (jaise "Show all" ya koi tab). Click ke baad tasveer khud badal jayegi.</div><img id="lv" style="display:none;max-width:100%;margin-top:8px;border:1px solid var(--bd);border-radius:8px;cursor:crosshair" onclick="lvClick(event)">
- <p class="mu">Local PC par: pehli baar jo browser window khule usme Arattai app se QR scan karein. Login yaad rahega. Ye window bhejte waqt band na karein, aur uspar kuch na karein.</p></div></div>
+<section class="pg" id="dash"><h1>Dashboard</h1><div class="sub">Connection aur summary</div>
+<div class="g2"><div class="c"><h3>Connection</h3><div class="big" id="dsSt">-</div><div class="mu" id="dsMsg"></div><p><button class="p" onclick="show('connect')">Connect / Login</button></p></div>
+<div class="c"><h3>Aapki Arattai list</h3><div class="row"><div><span class="big" id="nG">0</span><div class="mu">Groups</div></div><div style="width:30px"></div><div><span class="big" id="nC">0</span><div class="mu">Contacts</div></div></div><p><button onclick="loadChats(true)">Refresh list</button></p></div>
+<div class="c"><h3>Last broadcast</h3><div id="dsJob" class="mu">Abhi tak kuch nahi bheja</div></div></div></section>
 
-<div class="c"><h2>2. Chats / Groups (jinko bhejna hai)</h2>
- <textarea id="addTa" placeholder="Chat/group ke naam, ek line me ek (Arattai me jaise dikhte hain bilkul waise)" style="min-height:70px"></textarea>
- <div class="row" style="margin-top:8px"><button onclick="addBulk()">Add karo</button>
- <button class="s" onclick="loadChats()">Arattai se list lao</button>
- <button class="s" onclick="recips=[];saveR();renderR()">Sab hatao</button>
- <span class="mu" id="rc"></span></div>
- <div id="fbox" class="row" style="display:none;margin-top:8px;width:100%"><input id="fq" placeholder="Filter (naam likhein)" oninput="renderFound()">
- <select id="fk" onchange="renderFound()" style="width:auto;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:9px"><option value="">Sab</option><option value="group">Groups</option><option value="contact">Contacts</option></select>
- <button class="s" onclick="addAll()">Dikhe hue sab add karo</button></div><div id="found" class="tags"></div><div id="tags" class="tags"></div></div>
+<section class="pg" id="connect"><h1>Connect Arattai</h1><div class="sub">QR scan ya phone number se login (login saved rehta hai)</div>
+<div class="g2"><div class="col"><div class="c"><h3>Server</h3>
+<label class="l">Invite code / Access token</label><div class="row"><input type="password" id="tok" style="flex:1"><button onclick="saveTok()">Save</button></div>
+<label class="l" style="margin-top:8px">Server URL (khaali = yahi site)</label><input type="text" id="api" placeholder="https://...">
+<div class="row" style="margin-top:12px"><button class="p" onclick="act('start')">Connect / Login</button><button onclick="act('close')">Disconnect</button><button onclick="forgetMe()">Logout + mera data delete</button></div></div></div>
+<div class="col" id="lgBox"><div class="c"><h3>Login by QR</h3><div id="qrArea" class="mu">Phone me Arattai &gt; Linked devices &gt; Link a device, phir QR scan karein.</div><p><button class="p" onclick="act('qr')">QR dikhao</button></p></div>
+<div class="c"><h3>Login by phone number</h3><div id="phRow" class="row"><input type="text" id="ph" placeholder="10 digit number" style="flex:1" inputmode="tel"><select id="och" style="width:auto"><option value="app">App OTP</option><option value="sms">SMS OTP</option></select><button class="p" onclick="sendOtp()">OTP bhejo</button></div>
+<div id="otpRow" class="row" style="display:none"><input type="text" id="otp" placeholder="OTP" style="flex:1" inputmode="numeric"><button class="p" onclick="verOtp()">Verify</button></div></div></div></div></section>
 
-<div class="c"><h2>3. Message</h2>
- <textarea id="msg" placeholder="Message likhein..."></textarea>
- <div class="row" style="margin-top:8px"><input type="file" id="fi" multiple onchange="addFiles(this.files);this.value=''">
- <span class="mu">ya image copy karke Ctrl+V karein</span></div>
- <div class="files" id="files"></div>
- <div class="row" style="margin-top:12px"><span class="mu">Delay (second):</span>
- <input id="dmin" type="number" value="8" style="max-width:80px"><span>se</span><input id="dmax" type="number" value="15" style="max-width:80px"></div>
- <div class="row" style="margin-top:10px"><label class="mu"><input type="checkbox" id="cap" style="width:auto"> Text ko pehli file ke caption me bhejo (sirf English/ASCII text; warna alag message)</label></div>
- <div class="lv"><label><input type="checkbox" id="live" style="width:auto" onchange="saveS()"> <b>LIVE MODE</b> — asli groups me bhejna (off ho to sirf "Test" naam wale chats me jayega)</label></div>
-</div>
+<section class="pg" id="bc"><h1>Bulk Broadcast</h1><div class="sub">Message aur attachments bhejo</div>
+<div class="ban">Delay zaroor rakho, aur pehle Test chats me try karo!</div>
+<div class="g2"><div class="col">
+<div class="c"><h3>Recipients</h3><textarea id="names" placeholder="Chat/group ke naam, ek line me ek (Arattai me jaise dikhte hain bilkul waise)"></textarea>
+<div class="row" style="margin-top:8px"><button class="p" onclick="addNames()">Add karo</button><button onclick="show('groups')">My Groups</button></div>
+<div class="row sp" style="margin-top:10px"><span class="mu">Added: <b id="added">0</b></span><button onclick="recips=[];saveR();renderR()">Clear</button></div><div class="tags" id="tags"></div></div>
+<div class="c"><h3>Settings</h3><div class="row"><div style="flex:1"><label class="l">Min Delay (sec)</label><input type="number" id="dmin" value="10"></div><div style="flex:1"><label class="l">Max Delay (sec)</label><input type="number" id="dmax" value="40"></div></div>
+<div class="live"><label><input type="checkbox" id="live"><b>LIVE MODE</b> - asli groups me bhejna (off ho to sirf "Test" naam wale chats me jayega)</label></div>
+<div class="row" style="margin-top:8px"><label class="mu"><input type="checkbox" id="cap"> Text ko pehli file ke caption me bhejo (sirf English text)</label></div></div></div>
+<div class="col"><div class="c"><h3>Message</h3><label class="l">Caption / Text</label><textarea id="text" style="min-height:105px"></textarea>
+<label class="l" style="margin-top:10px">Attachment (optional)</label><div class="drop" id="drop">Click, drag and drop, ya image copy karke Ctrl+V<small>Images, Videos, Word, PDF</small></div><input type="file" id="fi" multiple hidden><div class="files" id="files"></div></div>
+<div class="c"><h3>Launch</h3><div class="row"><button class="p" id="go" onclick="go()">Start Broadcast</button><button class="d" onclick="act('stop')">Stop</button><span class="mu" id="prog"></span></div>
+<div class="bar"><i id="fill"></i></div><div class="st"><div><b class="ok" id="sOk">0</b><span class="mu">Sent</span></div><div><b class="err" id="sFail">0</b><span class="mu">Failed</span></div></div>
+<div id="fl"></div><div id="log"></div></div></div></div></section>
 
-<div class="c"><h2>4. Bhejo</h2>
- <div class="row"><button id="bGo" onclick="go()">Broadcast shuru karo</button><button class="r" onclick="api('stop')">Stop</button><span id="pr" class="mu"></span></div>
- <div class="bar"><i id="pb"></i></div><div id="log"></div><div id="errbox" style="display:none;margin-top:10px"><b>Aakhri fail ke waqt Arattai page aisa tha:</b><br><img id="errimg" style="max-width:100%;border:1px solid var(--bd);border-radius:8px;margin-top:6px"></div></div>
-</div>
+<section class="pg" id="groups"><h1>Groups</h1><div class="sub" id="groupsCnt">-</div><div class="c" id="groupsBox"></div></section>
+<section class="pg" id="contacts"><h1>Contacts</h1><div class="sub" id="contactsCnt">-</div><div class="c" id="contactsBox"></div></section>
+</main>
 <script>
-const $=id=>document.getElementById(id);
-let API=fixUrl(ld0('ar_api'))||(/github\.io$/.test(location.hostname)?'http://localhost:8765':'');
-function fixUrl(u){u=(u||'').trim().replace(/\/+$/,'');return u&&!/^https?:\/\//i.test(u)?'https://'+u:u}
-function ld0(k){try{return localStorage.getItem(k)||''}catch(e){return ''}}
-function svTok(){try{localStorage.setItem('ar_tok',$('tok').value.trim());localStorage.setItem('ar_api',fixUrl($('apiu').value))}catch(e){};location.reload()}
-function uid(){let u=ld0('ar_uid');if(!/^[a-f0-9]{32}$/.test(u)){u=[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,'0')).join('');try{localStorage.setItem('ar_uid',u)}catch(e){}}return u}
-function H0(){return {'X-Token':ld0('ar_tok'),'X-User':uid()}}
-async function forgetMe(){if(!confirm('Arattai se logout hoga aur server se aapka saara data (login, keys) delete hoga. Pakka?'))return;const r=await api('forget');alert(r.error||'Aapka data delete ho gaya.');location.reload()}
-let recips=[],files=[],ready=false;
-function ld(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
-function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
-recips=ld('ar_recips',[]);const S0=ld('ar_set',{});
-$('msg').value=S0.msg||'';$('dmin').value=S0.min||8;$('dmax').value=S0.max||15;$('live').checked=!!S0.live;
-function saveR(){sv('ar_recips',recips)}
-function saveS(){sv('ar_set',{msg:$('msg').value,min:$('dmin').value,max:$('dmax').value,live:$('live').checked})}
-['msg','dmin','dmax'].forEach(i=>$(i).addEventListener('input',saveS));
-function lbl(n){return typeof n==='string'?n:n.title}
-function renderR(){$('tags').innerHTML=recips.map((n,i)=>`<span class="tag">${esc(lbl(n))}<b onclick="recips.splice(${i},1);saveR();renderR()">✕</b></span>`).join('');$('rc').textContent=recips.length+' chune hue'}
-function esc(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function addBulk(){for(const l of $('addTa').value.split('\n')){const n=l.trim();if(n&&!recips.includes(n))recips.push(n)}$('addTa').value='';saveR();renderR()}
-function addFiles(fl){for(const f of fl){files.push(f)}renderF()}
-function renderF(){$('files').innerHTML='';files.forEach((f,i)=>{const d=document.createElement('div');d.className='f';
- if(f.type.startsWith('image/')){const im=document.createElement('img');im.src=URL.createObjectURL(f);d.appendChild(im)}
- d.append(f.name+' ('+Math.round(f.size/1024)+' KB) ');const b=document.createElement('b');b.textContent='✕';b.style.cursor='pointer';b.onclick=()=>{files.splice(i,1);renderF()};d.appendChild(b);$('files').appendChild(d)})}
-document.addEventListener('paste',e=>{for(const it of e.clipboardData.items){if(it.kind==='file'){const f=it.getAsFile();if(f){const n=f.name&&f.name!=='image.png'?f.name:'pasted_'+Date.now()+'.png';files.push(new File([f],n,{type:f.type}));}}}renderF()});
-async function api(p,b){const r=await fetch(API+'/api/'+p,{method:'POST',headers:H0(),body:JSON.stringify(b||{})});return r.json()}
-let found=[],shown=[];
-async function loadChats(){const r=await fetch(API+'/api/chats',{headers:H0()});const d=await r.json();if(d.error)return alert(d.error);
- found=d.items||(d.chats||[]).map(t=>({id:'',title:t,kind:''}));
- if(!found.length)return alert('Koi chat nahi mila. Naam box me khud likh kar Add karein.\n'+(d.debug||''));$('fbox').style.display='flex';renderFound()}
-function renderFound(){const q=$('fq').value.toLowerCase(),k=$('fk').value;
- shown=found.filter(x=>(!q||x.title.toLowerCase().includes(q))&&(!k||x.kind===k));
- $('found').innerHTML=shown.map((x,i)=>`<span class="tag" style="cursor:pointer" data-i="${i}">+ ${esc(x.title)} <span class="mu">${x.kind||''}</span></span>`).join('')||'<span class="mu">Kuch nahi mila</span>';
- $('found').querySelectorAll('[data-i]').forEach(el=>el.onclick=()=>{addRec(shown[el.dataset.i]);saveR();renderR()})}
-function addRec(x){if(!recips.some(r=>typeof r!=='string'&&x.id&&r.id===x.id))recips.push(x.id?{id:x.id,title:x.title}:x.title)}
-function addAll(){if(shown.length>20&&!confirm(shown.length+' chats add honge. Pakka?'))return;shown.forEach(addRec);saveR();renderR()}
-async function lvClick(e){const r=e.target.getBoundingClientRect();await api('click',{fx:(e.clientX-r.left)/r.width,fy:(e.clientY-r.top)/r.height});live()}
-let errTs=0;async function errShot(ts){try{const r=await fetch(API+'/api/errshot?'+ts,{headers:H0()});if(r.ok){$('errimg').src=URL.createObjectURL(await r.blob());$('errbox').style.display='block'}}catch(e){}}
-async function live(){const r=await fetch(API+'/api/screen?'+Date.now(),{headers:H0()});if(!r.ok)return alert('Screenshot nahi mila (browser start karein)');$('lv').src=URL.createObjectURL(await r.blob());$('lv').style.display='block';$('lvh').style.display='block'}
-let qrT=0;async function qrTick(){if(Date.now()-qrT<2500)return;qrT=Date.now();try{const r=await fetch(API+'/api/screen?'+qrT,{headers:H0()});if(r.ok)$('qr').src=URL.createObjectURL(await r.blob())}catch(e){}}
-function b64(f){return new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)})}
-async function go(){
- if(!ready)return alert('Pehle Arattai se connect karein');
- if(!recips.length)return alert('Koi chat nahi chuna');
- const live=$('live').checked;
- if(live&&!confirm(recips.length+' ASLI chats/groups me bhejna hai. Pakka?'))return;
- const fs=[];for(const f of files)fs.push({name:f.name,data:await b64(f)});
- const r=await api('send',{chats:recips,text:$('msg').value,files:fs,min:$('dmin').value,max:$('dmax').value,live,caption:$('cap').checked});
- if(r.error)alert(r.error)}
-async function sendOtp(){const r=await api('login',{phone:$('ph').value,channel:$('och').value});if(r.error)alert(r.error)}
-async function verOtp(){const r=await api('otp',{code:$('otp').value});if(r.error)alert(r.error);else $('otp').value=''}
-async function poll(){try{const d=await (await fetch(API+'/api/status',{headers:H0()})).json();
- if(d.error){$('nosrv').style.display='none';$('st').textContent='Token chahiye';$('st').className='pill wk';$('stm').textContent=d.error+(d.want_len!==undefined?` (aapne ${d.got_len} characters bheje, server ko ${d.want_len} chahiye)`:'')+' - neeche Invite code daal kar Save dabayein';ready=false;return}
- $('nosrv').style.display='none';ready=d.state==='ready';const st=$('st');st.textContent={idle:'Band',starting:'Khul raha',login:'Login ka intezaar',ready:'Taiyaar',sending:'Bhej rahe'}[d.state]||d.state;
- st.className='pill '+(ready?'ok':d.state==='idle'?'':'wk');$('stm').textContent=d.msg;
- if(d.errts&&d.errts!==errTs){errTs=d.errts;errShot(d.errts)}$('bGo').disabled=!ready;const am=d.backend==='api',lg=d.state==='login';$('apiBox').style.display=am?'block':'none';$('brBox').style.display=am?'none':'block';$('phRow').style.display=am&&lg&&d.need==='phone'?'flex':'none';$('otpRow').style.display=am&&lg&&d.need==='otp'?'flex':'none';$('qrbox').style.display=(!am&&lg)?'block':'none';if(!am&&lg)qrTick();const j=d.job;if(j&&j.total){$('pr').textContent=`${j.done}/${j.total} · safal ${j.ok} · fail ${j.fail}`+(j.current?` · ab: ${j.current}`:'');$('pb').style.width=(100*j.done/j.total)+'%'}
- const L=$('log'),bot=L.scrollTop+L.clientHeight>=L.scrollHeight-20;
- L.innerHTML=d.log.map(x=>`<div class="${x.k}">${x.t} ${esc(x.m)}</div>`).join('');if(bot)L.scrollTop=L.scrollHeight}catch(e){$('stm').textContent='Server se connection nahi';$('nosrv').style.display='block'}}
-(function(){const m=location.hostname.match(/^(.+)\.github\.io$/),p=location.pathname.split('/')[1];if(m&&p)$('dl').href='https://github.com/'+m[1]+'/'+p+'/archive/refs/heads/main.zip';else $('dl').removeAttribute('href')})();
-$('apiu').value=ld0('ar_api');$('tok').value=ld0('ar_tok');
-renderR();setInterval(poll,1500);poll();
+const $=id=>document.getElementById(id),ld=k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}},sv=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function uid(){let u=ld('ar_uid');if(!/^[a-f0-9]{32}$/.test(u)){u=[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,'0')).join('');sv('ar_uid',u)}return u}
+async function call(p,b){try{const r=await fetch(ld('ar_api')+'/api/'+p,{method:b===undefined?'GET':'POST',headers:{'X-Token':ld('ar_tok'),'X-User':uid(),'Content-Type':'application/json'},body:b===undefined?undefined:JSON.stringify(b)});return await r.json()}catch(e){return{error:'Server se connect nahi hua ('+e.message+')'}}}
+const act=async(p)=>{const r=await call(p,{});if(r.error)alert(r.error);poll()};
+let recips=[],files=[],chats=[],sel={groups:new Set(),contacts:new Set()},loaded=false,loading=false,lastFailed=[],state='idle';
+try{recips=JSON.parse(ld('ar_r')||'[]')}catch(e){}
+const lbl=n=>typeof n==='string'?n:n.title,saveR=()=>sv('ar_r',JSON.stringify(recips));
+function show(p){document.querySelectorAll('.pg').forEach(e=>e.classList.toggle('on',e.id===p));document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.p===p));location.hash=p}
+document.querySelectorAll('nav a').forEach(a=>a.onclick=()=>show(a.dataset.p));
+function saveTok(){sv('ar_tok',$('tok').value.trim());sv('ar_api',$('api').value.trim().replace(/\/$/,''));poll()}
+async function sendOtp(){const r=await call('login',{phone:$('ph').value,channel:$('och').value});if(r.error)alert(r.error);poll()}
+async function verOtp(){const r=await call('otp',{code:$('otp').value});if(r.error)alert(r.error);$('otp').value='';poll()}
+async function forgetMe(){if(!confirm('Arattai se logout hoga aur server se aapka saara data delete hoga. Pakka?'))return;const r=await call('forget',{});alert(r.error||'Data delete ho gaya.');location.reload()}
+function renderR(){$('added').textContent=recips.length;$('tags').innerHTML=recips.map((n,i)=>`<span class="tag">${esc(lbl(n))}<b onclick="recips.splice(${i},1);saveR();renderR()">&times;</b></span>`).join('')}
+function addRec(x){if(typeof x==='string'){if(!recips.some(r=>lbl(r)===x))recips.push(x)}else if(!recips.some(r=>r.id===x.id))recips.push({id:x.id,title:x.title})}
+function addNames(){$('names').value.split('\n').map(x=>x.trim()).filter(Boolean).forEach(n=>addRec(chats.find(c=>c.title.toLowerCase()===n.toLowerCase())||n));$('names').value='';saveR();renderR()}
+// ---- Groups / Contacts pages
+const isG=(k,c)=>k==='groups'?c.kind==='group':c.kind!=='group';
+function mkList(k){$(k+'Box').innerHTML=`<div class="row"><input type="text" id="${k}Q" placeholder="Filter (naam likhein)" style="flex:1" oninput="renderList('${k}')"><button onclick="selAll('${k}')">Select all shown</button><button class="p" onclick="addSel('${k}')">Add to Broadcast</button><button onclick="loadChats(true)">Refresh</button></div><div id="${k}List"></div>`}
+function renderList(k){const q=$(k+'Q').value.toLowerCase(),L=chats.filter(c=>isG(k,c)&&(!q||c.title.toLowerCase().includes(q)));window['sh_'+k]=L;
+ $(k+'List').innerHTML=L.map(c=>`<label class="li"><input type="checkbox" ${sel[k].has(c.id)?'checked':''} onchange="this.checked?sel['${k}'].add('${c.id}'):sel['${k}'].delete('${c.id}')"><span class="nm">${esc(c.title)}</span><span class="mu">${c.n?c.n+' members':''}${c.admin?' · admin':''}${c.kind==='contact'&&c.e2ee?' · DM':''}</span></label>`).join('')||'<p class="mu">Kuch nahi mila</p>';
+ $(k+'Cnt').textContent=chats.filter(c=>isG(k,c)).length+' total, '+L.length+' dikh rahe'}
+const selAll=k=>{(window['sh_'+k]||[]).forEach(c=>sel[k].add(c.id));renderList(k)};
+function addSel(k){const L=chats.filter(c=>sel[k].has(c.id));if(!L.length)return alert('Pehle chats chuniye (checkbox)');L.forEach(addRec);sel[k].clear();saveR();renderR();renderList(k);show('bc')}
+async function loadChats(force){if(loading)return;loading=true;const d=await call('chats');loading=false;
+ if(d.error||!(d.items&&d.items.length)){if(force)alert(d.error||('Koi chat nahi mila. '+(d.debug||'')));return}
+ chats=d.items;loaded=true;$('nG').textContent=chats.filter(c=>c.kind==='group').length;$('nC').textContent=chats.filter(c=>c.kind!=='group').length;['groups','contacts'].forEach(renderList)}
+// ---- attachments
+function addFiles(L){[...L].forEach(f=>files.push(f));renderF()}
+function renderF(){$('files').innerHTML=files.map((f,i)=>`<div class="f">${f.type.startsWith('image/')?`<img src="${URL.createObjectURL(f)}">`:`<div class="ic">${esc((f.name.split('.').pop()||'').slice(0,4).toUpperCase())}</div>`}${esc(f.name.slice(0,16))} (${f.size>1048576?(f.size/1048576).toFixed(1)+' MB':Math.ceil(f.size/1024)+' KB'}) <b onclick="files.splice(${i},1);renderF()">&times;</b></div>`).join('')}
+$('drop').onclick=()=>$('fi').click();$('fi').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+$('drop').ondragover=e=>e.preventDefault();$('drop').ondrop=e=>{e.preventDefault();addFiles(e.dataTransfer.files)};
+document.onpaste=e=>{const L=[...(e.clipboardData?.files||[])];if(L.length)addFiles(L.map(f=>f.name?f:new File([f],'pasted.png',{type:f.type})))};
+const b64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(',')[1]);r.onerror=no;r.readAsDataURL(f)});
+// ---- send
+async function go(list){list=Array.isArray(list)?list:recips;const text=$('text').value;
+ if(!list.length)return alert('Pehle recipients add karein');if(!text.trim()&&!files.length)return alert('Message ya file chahiye');
+ const live=$('live').checked;if(live&&!confirm('LIVE MODE: '+list.length+' chats me bhejna hai. Pakka?'))return;
+ $('go').disabled=true;const fs=[];for(const f of files)fs.push({name:f.name,data:await b64(f)});
+ const r=await call('send',{chats:list,text,files:fs,min:$('dmin').value,max:$('dmax').value,live,caption:$('cap').checked});if(r.error)alert(r.error);poll()}
+const retryFailed=()=>go(lastFailed.map(f=>f.rec||f.title));
+// ---- status
+const COL={ready:'#16a34a',sending:'#f5c400',login:'#f59e0b',starting:'#f5c400',idle:'#bbb'};
+async function poll(){const d=await call('status');
+ if(d.error){$('dot').style.background='#dc2626';$('stl').textContent='Invite code / server?';$('dsSt').textContent='Error';$('dsMsg').textContent=d.error+' - Connect Arattai me code daal kar Save dabayein';return}
+ state=d.state;$('dot').style.background=COL[d.state]||'#bbb';$('stl').textContent=d.state==='ready'?'Connected':d.state==='sending'?'Sending...':d.state==='login'?'Login chahiye':'Disconnected';
+ $('dsSt').textContent=$('stl').textContent;$('dsMsg').textContent=d.msg||'';
+ $('lgBox').style.display=d.state==='login'?'block':'none';$('phRow').style.display=d.need==='otp'?'none':'flex';$('otpRow').style.display=d.need==='otp'?'flex':'none';
+ if(d.need==='qr'&&d.qr)$('qrArea').innerHTML=d.qr.svg?`<div style="width:210px;margin:auto">${d.qr.svg}</div><p class="mu" style="text-align:center">${esc(d.qr.msg||'')}</p>`:`<p class="mu">${esc(d.qr.msg||'QR ban raha hai...')}</p>`;
+ if(d.state==='ready'&&!loaded)loadChats(); if(d.state!=='ready'&&d.state!=='sending')loaded=false;
+ const j=d.job;if(j){const t=j.total||0;$('prog').textContent=`${j.done||0}/${t} · safal ${j.ok||0} · fail ${j.fail||0}${j.current?' · '+j.current:''}`;
+  $('fill').style.width=t?Math.round((j.done||0)*100/t)+'%':'0';$('sOk').textContent=j.ok||0;$('sFail').textContent=j.fail||0;
+  $('dsJob').textContent=`Safal ${j.ok||0}, Fail ${j.fail||0} (${j.done||0}/${t})`;lastFailed=j.failed||[];
+  $('fl').innerHTML=lastFailed.length&&d.state!=='sending'?`<div class="fl"><b>${lastFailed.length} chats fail hue:</b>${lastFailed.map(f=>`<div>• ${esc(f.title)} - <span class="mu">${esc(f.reason)}</span></div>`).join('')}<p><button class="p" onclick="retryFailed()">Sirf failed chats dobara bhejo</button></p></div>`:''}
+ $('go').disabled=d.state!=='ready';
+ const L=$('log'),near=L.scrollHeight-L.scrollTop-L.clientHeight<40;L.innerHTML=(d.log||[]).slice(-200).map(x=>`<div class="${x.k}">${esc(x.t)} ${esc(x.m)}</div>`).join('');if(near)L.scrollTop=L.scrollHeight}
+$('tok').value=ld('ar_tok');$('api').value=ld('ar_api');$('live').checked=false;mkList('groups');mkList('contacts');renderR();
+show(location.hash.slice(1)&&$(location.hash.slice(1))?location.hash.slice(1):'bc');poll();setInterval(poll,1500);
 </script></body></html>
