@@ -369,6 +369,10 @@ def api_worker():
             S["need"] = ""; set_state("ready", "Taiyaar"); log("ok", "Arattai login (QR)")
         elif u["state"] == "error":
             log("err", u["msg"]); S["need"] = "phone"; set_state("login", u["msg"])
+    def start_qr():
+        S["qr"] = {"state": "pending", "svg": "", "msg": "QR ban raha hai..."}
+        S["need"] = "qr"; set_state("login", "QR scan karein")
+        be.qr_begin(qr_update)
     def wait(sec):
         end = time.time() + sec
         while time.time() < end and not S["stop"]:
@@ -393,9 +397,7 @@ def api_worker():
             elif cmd == "qr":
                 if be.client:
                     set_state("ready", "Taiyaar"); continue
-                S["qr"] = {"state": "pending", "svg": "", "msg": "QR ban raha hai..."}
-                S["need"] = "qr"; set_state("login", "QR scan karein")
-                be.qr_begin(qr_update)
+                start_qr()
             elif cmd == "login":
                 be.qr_stop()
                 try:
@@ -427,11 +429,16 @@ def api_worker():
             elif cmd in ("shot", "click"):
                 c["ev"].set()                      # api mode me screenshot nahi hota
             elif cmd == "logout":
-                try:
-                    (be.client or ab.ArattaiClient.from_session()).logout(True)
-                except Exception as e:
-                    log("warn", "server-side logout: " + repr(e)[:120])
-                be.disconnect(); S["need"] = ""; set_state("idle", "Logout ho gaya")
+                err = be.logout()
+                if err:
+                    log("warn", "server-side logout: " + err + " (local login phir bhi hata diya)")
+                with LOCK:
+                    S["log"] = []; S["job"] = None
+                log("ok", "Logout ho gaya. Naye login ke liye QR scan karein.")
+                if c.get("qr", True):
+                    start_qr()
+                else:
+                    S["need"] = ""; set_state("idle", "Logout ho gaya")
             elif cmd == "close":
                 be.disconnect(); S["need"] = ""; set_state("idle", "Disconnect ho gaya (login saved hai)")
         except Exception as e:
@@ -526,7 +533,9 @@ class H(BaseHTTPRequestHandler):
         elif self.path == "/api/qr" and BACKEND == "api":
             cmds.put({"cmd": "qr"}); self.send_json({"ok": True})
         elif self.path == "/api/logout" and BACKEND == "api":
-            cmds.put({"cmd": "logout"}); self.send_json({"ok": True})
+            if S["state"] == "sending":
+                return self.send_json({"error": "Broadcast chal raha hai - pehle Stop dabayein, phir logout karein"}, 400)
+            cmds.put({"cmd": "logout", "qr": d.get("qr", True) is not False}); self.send_json({"ok": True})
         elif self.path == "/api/close":
             cmds.put({"cmd": "close"}); self.send_json({"ok": True})
         elif self.path == "/api/click":
