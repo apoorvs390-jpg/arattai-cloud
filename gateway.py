@@ -6,7 +6,7 @@ Har browser ek random ID (X-User) banata hai. Gateway us ID ke liye alag worker 
 Koi bhi user dusre ka login/chats/files nahi dekh sakta. Idle worker band ho jaata hai
 (login disk par saved rehta hai, dobara Connect karne par bina OTP ke wapas aata hai).
 
-Env: ACCESS_TOKEN (invite code, zaroori), DATA_DIR, MAX_USERS=10, IDLE_MIN=30, MAX_BODY_MB=150,
+Env: ACCESS_TOKEN (invite code, zaroori), DATA_DIR, MAX_USERS=10, IDLE_MIN=30, MAX_BODY_MB=320,
      ALLOW_OPEN=1 (bina invite code ke - khatarnak), NODE_SHARED=/opt/pya/node_modules
 """
 import hashlib, http.client, json, os, re, secrets, shutil, socket, subprocess, sys, threading, time
@@ -20,7 +20,7 @@ ROOT = Path(os.environ.get("DATA_DIR", HERE / "data")) / "users"
 MAX_USERS = int(os.environ.get("MAX_USERS", 10))
 IDLE_SEC = int(float(os.environ.get("IDLE_MIN", 30)) * 60)
 REAP_SEC = float(os.environ.get("REAP_SEC", 60))
-MAX_BODY = int(float(os.environ.get("MAX_BODY_MB", 150)) * 1048576)
+MAX_BODY = int(float(os.environ.get("MAX_BODY_MB", 320)) * 1048576)
 NODE_SHARED = os.environ.get("NODE_SHARED", "/opt/pya/node_modules")
 INTERNAL = secrets.token_hex(16)                 # gateway <-> worker ka gupt token
 UID_RE = re.compile(r"^[a-f0-9]{32,64}$")
