@@ -42,7 +42,12 @@ except ImportError:
 
 SAFE_PREFIX = "Test"          # LIVE MODE off ho to sirf is naam se shuru hone wale chats allowed
 LOG_FILE = DATA / "arattai_log.csv"
-MAX_FILE_MB = float(os.environ.get("MAX_FILE_MB", 64))
+MAX_FILE_MB = float(os.environ.get("MAX_FILE_MB", 120))
+
+
+def orig_name(path):
+    """Server upload ke waqt naam ke aage 8-hex prefix lagata hai; receiver ko asli naam dikhao."""
+    return re.sub(r"^[0-9a-f]{8}_", "", Path(path).name)
 KEEPALIVE_SEC = 600
 RATE_PAUSE_SEC = 60
 MAX_CONSEC_FAIL = 5
@@ -366,7 +371,7 @@ class Backend:
                 "x-cliq-content-type": mime, "Content-Type": mime,
                 "x-cliq-comment": quote(caption) if caption else "",
                 "upload-id": "{}_{}".format(chat_id, ts), "x-cliq-msgid": str(ts),
-                "file-name": quote(p.name), "x-service": "arattai", "x-cliq-sid": sid,
+                "file-name": quote(orig_name(p)), "x-service": "arattai", "x-cliq-sid": sid,
                 "x-client-time-utc": str(ts), "x-cliq-id": chat_id,
             }
             try:
@@ -406,7 +411,7 @@ def run_job(be, job, log, stopped, wait, rng):
     for f in files:                                  # bhejne se pehle size check
         mb = Path(f).stat().st_size / 1048576
         if mb > MAX_FILE_MB:
-            log("err", "{} {:.0f} MB hai (limit {:.0f} MB). Kuch nahi bheja.".format(Path(f).name, mb, MAX_FILE_MB))
+            log("err", "{} {:.0f} MB hai (limit {:.0f} MB). Kuch nahi bheja.".format(orig_name(f), mb, MAX_FILE_MB))
             job["total"] = 0
             return
     cap_ok = bool(job.get("caption")) and bool(files) and text.strip() and text.isascii()
