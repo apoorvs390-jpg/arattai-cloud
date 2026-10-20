@@ -10,6 +10,7 @@ endpoint ke headers live Arattai par aapko pehle ek "Test" chat me verify karne 
 from __future__ import annotations
 
 import csv
+import io
 import json
 import mimetypes
 import os
@@ -47,6 +48,27 @@ LOG_FILE = DATA / "arattai_log.csv"
 UP_STRATEGY_FILE = "~/.pyarattai/upload_strategy.json"
 STRATS = [{"sid": sid, "hdr": hdr, "csrf": csrf, "cookies": ck}
           for ck in ("jar", "all") for hdr in ("browser", "minimal") for csrf in ("zchat", "none") for sid in ("a", "ws")]
+
+
+UPLOAD_TIMEOUT = float(os.environ.get("UPLOAD_TIMEOUT", 300))   # har data-block/jawab ka intezaar (poori file ka nahi)
+
+
+class _Body:
+    """File-jaisa body: requests Content-Length lagata hai aur data chhote blocks me jaata hai, isliye
+    timeout har block par lagta hai (poori badi file par nahi). Bade upload par 25/50/75% progress."""
+    def __init__(self, data, on_progress=None):
+        self._b, self._n, self._cb, self._next = io.BytesIO(data), len(data), on_progress, 25
+
+    def __len__(self):
+        return self._n
+
+    def read(self, n=-1):
+        chunk = self._b.read(n)
+        if self._cb and self._n:
+            pct = self._b.tell() * 100 // self._n
+            while self._next <= 100 and pct >= self._next:
+                self._cb(self._next); self._next += 25
+        return chunk
 
 
 def strat_label(st):
@@ -107,6 +129,8 @@ def explain(e):
         hint = "Arattai file-server ne upload reject kiya (headers/cookies ka masla, chat permission nahi) - Connect page par 'Upload test' chalayein"
     elif "http 401" in low or "http 403" in low:
         hint = "is chat me post karne ki permission nahi lagti (admin-only group/channel?) ya session expire"
+    elif "write operation timed out" in low or "read timed out" in low:
+        hint = "upload bahut dheema/atak gaya - badi file ho to chhoti (compress) karein, ya Railway region Singapore/Asia rakhein"
     elif "http 404" in low:
         hint = "chat id nahi mila (group delete/left?) - list dobara laayein"
     elif "http 413" in low:
@@ -392,12 +416,17 @@ class Backend:
                 pass
         url = _ps._BASE_MAP["files"].rstrip("/") + "/webupload"
         jar = self.client.s.http.cookies
+        cb = None
+        if len(data) > 8 * 1048576:
+            mb = len(data) // 1048576
+            cb = lambda pct: self.log("info", "{}: upload {}% ({} MB)".format(name[:30], pct, mb))
+        body = _Body(data, cb)
         if st["cookies"] == "all":               # sab arattai cookies explicitly (host-only wali bhi)
             ck = "; ".join("{}={}".format(c.name, c.value) for c in jar if "arattai.in" in (c.domain or ""))
             if ck:
                 h["Cookie"] = ck
-            return requests.post(url, data=data, headers=h, timeout=300)
-        return self.client.s.http.post(url, data=data, headers=h, timeout=300)
+            return requests.post(url, data=body, headers=h, timeout=(15, UPLOAD_TIMEOUT))
+        return self.client.s.http.post(url, data=body, headers=h, timeout=(15, UPLOAD_TIMEOUT))
 
     @staticmethod
     def _judge(resp):
@@ -521,9 +550,11 @@ def run_job(be, job, log, stopped, wait, rng):
                         log("warn", "Arattai ne throttle kiya, {}s ruk kar dobara try".format(RATE_PAUSE_SEC))
                         wait(RATE_PAUSE_SEC)
                     except Exception as ex:               # network/5xx: 2 baar aur koshish; 4xx permanent
-                        if attempt >= 3 or re.search(r"HTTP 4\d\d", str(ex)):
+                        slow = kind == "file" and "timed out" in str(ex).lower()
+                        if attempt >= (2 if slow else 3) or re.search(r"HTTP 4\d\d", str(ex)):
                             raise
-                        log("warn", "{}: dobara koshish ({}/3)".format(label, attempt))
+                        log("warn", "{}: {} dobara koshish ({}/{})".format(
+                            label, orig_name(arg) if kind == "file" else "text", attempt, 2 if slow else 3))
                         wait(4 * attempt)
                 done_parts += 1
             job["ok"] += 1
