@@ -1,1 +1,3 @@
 irotechlab-pyarattai==0.1.0
+segno>=1.6
+qrcode==8.2
