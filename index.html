@@ -121,7 +121,7 @@ async function poll(){const d=await call('status');
  state=d.state;$('dot').style.background=COL[d.state]||'#bbb';$('stl').textContent=d.state==='ready'?'Connected':d.state==='sending'?'Sending...':d.state==='login'?'Login chahiye':'Disconnected';
  $('dsSt').textContent=$('stl').textContent;$('dsMsg').textContent=d.msg||'';
  $('lgBox').style.display=d.state==='login'?'block':'none';$('lo').style.display=(d.state==='ready'||d.state==='sending')?'block':'none';if(d.need!=='qr')$('qrArea').innerHTML='Phone me Arattai &gt; Linked devices &gt; Link a device, phir QR scan karein.';$('phRow').style.display=d.need==='otp'?'none':'flex';$('otpRow').style.display=d.need==='otp'?'flex':'none';
- if(d.need==='qr'&&d.qr)$('qrArea').innerHTML=d.qr.svg?`<div style="width:210px;margin:auto">${d.qr.svg}</div><p class="mu" style="text-align:center">${esc(d.qr.msg||'')}</p>`:`<p class="mu">${esc(d.qr.msg||'QR ban raha hai...')}</p>`;
+ if(d.need==='qr'&&d.qr)$('qrArea').innerHTML=d.qr.svg?`<div style="width:230px;margin:auto;background:#fff">${d.qr.svg.startsWith('data:')?`<img src="${d.qr.svg}" alt="QR" style="width:100%;display:block">`:d.qr.svg}</div><p class="mu" style="text-align:center">${esc(d.qr.msg||'')}</p>`:`<p class="mu">${esc(d.qr.msg||'QR ban raha hai...')}</p>`;
  if(d.state==='ready'&&!loaded&&Date.now()>lockUntil)loadChats(); if(d.state!=='ready'&&d.state!=='sending')loaded=false;
  const j=d.job;if(j){const t=j.total||0;$('prog').textContent=`${j.done||0}/${t} · safal ${j.ok||0} · fail ${j.fail||0}${j.current?' · '+j.current:''}`;
   $('fill').style.width=t?Math.round((j.done||0)*100/t)+'%':'0';$('sOk').textContent=j.ok||0;$('sFail').textContent=j.fail||0;
