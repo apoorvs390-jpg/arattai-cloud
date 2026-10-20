@@ -46,9 +46,21 @@ except ImportError:
 SAFE_PREFIX = "Test"          # LIVE MODE off ho to sirf is naam se shuru hone wale chats allowed
 LOG_FILE = DATA / "arattai_log.csv"
 UP_STRATEGY_FILE = "~/.pyarattai/upload_strategy.json"
-STRATS = [{"sid": sid, "hdr": hdr, "csrf": csrf, "cookies": ck, "ctype": ct}
-          for ct in ("mime", "octet") for ck in ("jar", "all") for hdr in ("browser", "minimal")
-          for csrf in ("zchat", "none") for sid in ("a", "ws")]
+def _build_strats():
+    out = []
+    for csrf in ("drscc", "zchat", "drscc_raw", "none"):          # drscc = files server ka apna security cookie
+        for tkp in (False, True):                                  # x-tkp-token header bhi bhejna?
+            for hdr in ("browser", "minimal"):
+                for sid in ("a", "ws"):
+                    out.append({"sid": sid, "hdr": hdr, "csrf": csrf, "cookies": "jar", "ctype": "mime", "tkp": tkp})
+    for csrf in ("drscc", "zchat"):
+        for sid in ("a", "ws"):
+            out.append({"sid": sid, "hdr": "browser", "csrf": csrf, "cookies": "all", "ctype": "mime", "tkp": False})
+            out.append({"sid": sid, "hdr": "browser", "csrf": csrf, "cookies": "jar", "ctype": "octet", "tkp": False})
+    return out
+
+
+STRATS = _build_strats()
 
 
 UPLOAD_TIMEOUT = float(os.environ.get("UPLOAD_TIMEOUT", 300))   # har data-block/jawab ka intezaar (poori file ka nahi)
@@ -73,7 +85,7 @@ class _Body:
 
 
 def strat_label(st):
-    return "sid={sid} hdr={hdr} csrf={csrf} cookies={cookies} ct={ctype}".format(**{"ctype": "mime", **st})
+    return "sid={sid} hdr={hdr} csrf={csrf} cookies={cookies} ct={ctype} tkp={tkp}".format(**{"ctype": "mime", "tkp": False, **st})
 
 
 MAX_FILE_MB = float(os.environ.get("MAX_FILE_MB", 120))
@@ -170,6 +182,7 @@ class Backend:
         self.client = None
         self._pending = None        # (Session, Auth, phone) OTP ke beech
         self._chats = []            # pyarattai Chat objects (cache)
+        self._sid_cache = (0.0, "")   # (waqt, ws sid) - 90s tak wahi, taaki har koshish par 15s na lage
         self._up_st = None          # upload ka jo tareeka chala (diagnose / pehli safal koshish se)
         try:
             self._up_st = json.loads(Path(os.path.expanduser(UP_STRATEGY_FILE)).read_text())
@@ -401,9 +414,7 @@ class Backend:
     def _attempt(self, chat_id, name, data, mime, caption, st):
         """Ek upload koshish, strategy `st` ke hisaab se. Response lautata hai."""
         ts = int(time.time() * 1000)
-        sid = "a"
-        if st["sid"] == "ws":
-            sid = (self.client._fresh_ws_sid() or "") if hasattr(self.client, "_fresh_ws_sid") else ""
+        sid = self._ws_sid() if st["sid"] == "ws" else "a"
         h = dict(FILES_HEADERS) if st["hdr"] == "browser" else {"User-Agent": FILES_HEADERS["User-Agent"]}
         h.update({"x-cliq-content-type": mime,
                   "Content-Type": "application/octet-stream" if st.get("ctype") == "octet" else mime,
@@ -411,13 +422,18 @@ class Backend:
                   "upload-id": "{}_{}".format(chat_id, ts), "x-cliq-msgid": str(ts),
                   "file-name": quote(name), "x-service": "arattai", "x-cliq-sid": sid,
                   "x-client-time-utc": str(ts), "x-cliq-id": chat_id, "client-time": str(ts)})
+        url = _ps._BASE_MAP["files"].rstrip("/") + "/webupload"
+        jar = self.client.s.http.cookies
+        ck = lambda n: next((c.value for c in jar if c.name == n), "")
         if st["csrf"] == "zchat":
             try:
                 h.update(self.client.s._zcsrf_header())
             except Exception:
                 pass
-        url = _ps._BASE_MAP["files"].rstrip("/") + "/webupload"
-        jar = self.client.s.http.cookies
+        elif st["csrf"] in ("drscc", "drscc_raw") and ck("drscc"):
+            h["X-ZCSRF-TOKEN"] = ("drscc=" if st["csrf"] == "drscc" else "") + ck("drscc")
+        if st.get("tkp") and ck("x-tkp-token"):
+            h["x-tkp-token"] = ck("x-tkp-token")
         cb = None
         if len(data) > 8 * 1048576:
             mb = len(data) // 1048576
@@ -429,6 +445,29 @@ class Backend:
                 h["Cookie"] = ck
             return requests.post(url, data=body, headers=h, timeout=(15, UPLOAD_TIMEOUT))
         return self.client.s.http.post(url, data=body, headers=h, timeout=(15, UPLOAD_TIMEOUT))
+
+    def _ws_sid(self):
+        t, sid = self._sid_cache
+        if time.time() - t < 90:
+            return sid
+        try:
+            sid = (self.client._fresh_ws_sid() or "") if hasattr(self.client, "_fresh_ws_sid") else ""
+        except Exception:
+            sid = ""
+        self._sid_cache = (time.time(), sid)
+        return sid
+
+    def _prime(self):
+        """Files server pehli baar milne par apna drscc cookie deta hai - pehle ek halki request se le lo."""
+        jar = self.client.s.http.cookies
+        if any(c.name == "drscc" for c in jar):
+            return
+        try:
+            self.client.s.http.get(_ps._BASE_MAP["files"].rstrip("/") + "/", timeout=15,
+                                   headers={"User-Agent": FILES_HEADERS["User-Agent"], "Origin": FILES_HEADERS["Origin"],
+                                            "Referer": FILES_HEADERS["Referer"]})
+        except Exception:
+            pass
 
     @staticmethod
     def _judge(resp):
@@ -458,6 +497,7 @@ class Backend:
         data = p.read_bytes()                      # bytes: retry me bhi poori file jaati hai
         name = orig_name(p)
         last = "upload fail"
+        self._prime()
         for st in ([self._up_st] if self._up_st else STRATS[:2]):
             resp = self._attempt(chat_id, name, data, mime, caption, st)
             ok, body = self._judge(resp)
@@ -472,16 +512,22 @@ class Backend:
 
     def diagnose_upload(self, chat_id):
         """Chhoti test file se saare upload tareeke aazmao; jo chale use yaad rakho. Poori report log me."""
+        self._prime()
         cks = sorted({"{}@{}".format(c.name, c.domain) for c in self.client.s.http.cookies})
         self.log("info", "Cookies (naam@domain): " + ", ".join(cks)[:700])
+        ws = self._ws_sid()
+        self.log("info", "WebSocket sid: " + ("mila ({} akshar)".format(len(ws)) if ws else "NAHI mila (ws wale tareeke skip honge)"))
         shown = False
         for i, st in enumerate(STRATS, 1):
+            if st["sid"] == "ws" and not ws:
+                continue
             try:
                 resp = self._attempt(chat_id, "upload-test.txt", b"Arattai tool upload test", "text/plain", "", st)
                 ok, body = self._judge(resp)
             except Exception as e:
                 self.log("err", "#{} {} -> {!r}".format(i, strat_label(st), e)[:300]); continue
-            self.log("ok" if ok else "warn", "#{} {} -> HTTP {} {}".format(i, strat_label(st), resp.status_code, body[:100]))
+            extra = " ".join("{}={}".format(k, resp.headers[k][:100]) for k in ("x-error", "x-msg") if k in resp.headers)
+            self.log("ok" if ok else "warn", "#{} {} -> HTTP {} {} {}".format(i, strat_label(st), resp.status_code, extra, body[:100]))
             if ok:
                 self._up_st = st
                 self._save_st()
@@ -489,7 +535,7 @@ class Backend:
                 return True
             if not shown:
                 shown = True
-                self.log("info", "Server ke response headers: " + ", ".join("{}: {}".format(k, v[:50]) for k, v in resp.headers.items())[:500])
+                self.log("info", "Pehle response ke headers: " + ", ".join("{}: {}".format(k, v[:80]) for k, v in resp.headers.items())[:1400])
         self.log("err", "Koi bhi upload tareeka nahi chala - upar ki saari lines copy karke bhejein.")
         return False
 
