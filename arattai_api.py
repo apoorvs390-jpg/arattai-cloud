@@ -283,6 +283,28 @@ class Backend:
         self.qr_stop()
         self.client = self._pending = None
 
+    def logout(self):
+        """Arattai se logout + local session/Signal keys hamesha delete (naya banda saaf login kare). Error text lautata hai."""
+        err = ""
+        try:
+            (self.client or ArattaiClient.from_session()).logout(True)
+        except Exception as e:
+            err = repr(e)[:120]
+        self.disconnect()
+        files = [os.path.expanduser(SESSION_FILE)]
+        try:
+            from pyarattai.signal import SIGNAL_FILE
+            files.append(str(SIGNAL_FILE))
+        except Exception:
+            pass
+        for f in files:
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+        self._chats, self._up_mode, self._pending = [], None, None
+        return err
+
     # ------------------------------------------------------------ chats
     def list_chats(self):
         self._chats = [c for c in self.client.get_chats(limit=2000) if c.id]
