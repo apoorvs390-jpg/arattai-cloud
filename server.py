@@ -363,6 +363,12 @@ def api_worker():
     be = ab.Backend(log)
     def need_login(msg):
         S["need"] = "phone"; set_state("login", msg)
+    def qr_update(u):                      # QR thread se (background)
+        S["qr"] = u
+        if u["state"] == "ready":
+            S["need"] = ""; set_state("ready", "Taiyaar"); log("ok", "Arattai login (QR)")
+        elif u["state"] == "error":
+            log("err", u["msg"]); S["need"] = "phone"; set_state("login", u["msg"])
     def wait(sec):
         end = time.time() + sec
         while time.time() < end and not S["stop"]:
@@ -384,7 +390,14 @@ def api_worker():
                     S["need"] = ""; set_state("ready", "Taiyaar"); log("ok", "Arattai login (saved session)")
                 else:
                     need_login("Arattai number daalein")
+            elif cmd == "qr":
+                if be.client:
+                    set_state("ready", "Taiyaar"); continue
+                S["qr"] = {"state": "pending", "svg": "", "msg": "QR ban raha hai..."}
+                S["need"] = "qr"; set_state("login", "QR scan karein")
+                be.qr_begin(qr_update)
             elif cmd == "login":
+                be.qr_stop()
                 try:
                     shown = be.begin_login(c["phone"], c["channel"])
                     S["need"] = "otp"; set_state("login", "OTP bheja gaya: %s (Arattai app ya SMS dekhein)" % shown)
@@ -481,7 +494,7 @@ class H(BaseHTTPRequestHandler):
         elif self.path == "/api/status":
             with LOCK:
                 self.send_json({"state": S["state"], "msg": S["msg"], "job": S["job"], "log": S["log"][-200:], "errts": ERR["ts"],
-                                "backend": BACKEND, "need": S["need"]})
+                                "backend": BACKEND, "need": S["need"], "qr": S.get("qr") if S["need"] == "qr" else None})
         elif self.path == "/api/chats":
             if S["state"] != "ready":
                 return self.send_json({"error": "Pehle browser start/login karein"}, 400)
@@ -510,6 +523,8 @@ class H(BaseHTTPRequestHandler):
             code = re.sub(r"\D", "", d.get("code", ""))
             if not code: return self.send_json({"error": "OTP likhein"}, 400)
             cmds.put({"cmd": "otp", "code": code}); self.send_json({"ok": True})
+        elif self.path == "/api/qr" and BACKEND == "api":
+            cmds.put({"cmd": "qr"}); self.send_json({"ok": True})
         elif self.path == "/api/logout" and BACKEND == "api":
             cmds.put({"cmd": "logout"}); self.send_json({"ok": True})
         elif self.path == "/api/close":
