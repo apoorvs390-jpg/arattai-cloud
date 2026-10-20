@@ -426,6 +426,19 @@ def api_worker():
             elif cmd == "chats" and be.client:
                 items = be.list_chats()
                 c["out"].append({"names": [i["title"] for i in items], "items": items, "debug": ""}); c["ev"].set()
+            elif cmd == "diag" and be.client:
+                be.list_chats()
+                chat, err = be.resolve(c["chat"])
+                if not chat:
+                    log("err", "Upload test: " + err)
+                elif not chat["title"].startswith(ab.SAFE_PREFIX):
+                    log("err", "Upload test sirf '{}' naam wale chat me chalta hai (test file wahan jayegi)".format(ab.SAFE_PREFIX))
+                else:
+                    set_state("sending", "Upload test chal raha hai...")
+                    try:
+                        be.diagnose_upload(chat["id"])
+                    finally:
+                        set_state("ready", "Taiyaar")
             elif cmd in ("shot", "click"):
                 c["ev"].set()                      # api mode me screenshot nahi hota
             elif cmd == "logout":
@@ -530,6 +543,13 @@ class H(BaseHTTPRequestHandler):
             code = re.sub(r"\D", "", d.get("code", ""))
             if not code: return self.send_json({"error": "OTP likhein"}, 400)
             cmds.put({"cmd": "otp", "code": code}); self.send_json({"ok": True})
+        elif self.path == "/api/diag" and BACKEND == "api":
+            if S["state"] != "ready":
+                return self.send_json({"error": "Pehle Arattai se connect karein"}, 400)
+            name = (d.get("chat") or "").strip()
+            if not name:
+                return self.send_json({"error": "Test chat ka naam likhein"}, 400)
+            cmds.put({"cmd": "diag", "chat": name}); self.send_json({"ok": True})
         elif self.path == "/api/qr" and BACKEND == "api":
             cmds.put({"cmd": "qr"}); self.send_json({"ok": True})
         elif self.path == "/api/logout" and BACKEND == "api":
