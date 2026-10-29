@@ -414,7 +414,9 @@ class Backend:
     def _attempt(self, chat_id, name, data, mime, caption, st):
         """Ek upload koshish, strategy `st` ke hisaab se. Response lautata hai."""
         ts = int(time.time() * 1000)
-        sid = self._ws_sid() if st["sid"] == "ws" else "a"
+        sid = "a" if st["sid"] == "a" else self._sid_candidates().get(st["sid"], "")
+        if not sid:
+            raise ArattaiError("upload sid '{}' nahi mila".format(st["sid"]))
         h = dict(FILES_HEADERS) if st["hdr"] == "browser" else {"User-Agent": FILES_HEADERS["User-Agent"]}
         h.update({"x-cliq-content-type": mime,
                   "Content-Type": "application/octet-stream" if st.get("ctype") == "octet" else mime,
@@ -450,12 +452,76 @@ class Backend:
         t, sid = self._sid_cache
         if time.time() - t < 90:
             return sid
-        try:
-            sid = (self.client._fresh_ws_sid() or "") if hasattr(self.client, "_fresh_ws_sid") else ""
-        except Exception:
-            sid = ""
+        sid, why = "", ""
+        for name in ("_fresh_ws_sid", "fresh_ws_sid", "get_ws_sid", "ws_sid", "_ws_sid"):
+            fn = getattr(self.client, name, None)
+            if fn is None:
+                continue
+            try:
+                v = fn() if callable(fn) else fn
+                if isinstance(v, str) and v.strip():
+                    sid = v.strip(); break
+            except Exception as e:
+                why = "{}(): {!r}".format(name, e)[:200]
+        if not sid and why and why != getattr(self, "_ws_why", ""):
+            self._ws_why = why
+            self.log("warn", "WebSocket sid nikalte waqt error: " + why)
         self._sid_cache = (time.time(), sid)
         return sid
+
+    def _sid_candidates(self):
+        """x-cliq-sid ke liye asli session id ke sabhi mumkin source. {label: value} (khaali wale hata kar)."""
+        out = {"ws": self._ws_sid()}
+        c, s = self.client, getattr(self.client, "s", None)
+        for label, obj in (("sess", c), ("ssess", s)):
+            for attr in ("session_id", "sid", "chat_sid", "wms_sid"):
+                v = getattr(obj, attr, None) if obj is not None else None
+                if isinstance(v, (str, int)) and str(v).strip() and str(v) != "a":
+                    out.setdefault(label, str(v).strip())
+                    break
+        try:   # login ke waqt session.json me likha session_id (Auth.establish_chat_session se)
+            blob = json.loads(Path(os.path.expanduser(SESSION_FILE)).read_text())
+            v = blob.get("session_id") or blob.get("sid")
+            if v:
+                out.setdefault("file", str(v).strip())
+        except Exception:
+            pass
+        seen, uniq = set(), {}
+        for k, v in out.items():               # ek hi value do naam se na aazmayein
+            if v and v not in seen:
+                seen.add(v); uniq[k] = v
+        return uniq
+
+    def _introspect(self):
+        """Library me kya hai - sirf naam/lambai (koi secret log nahi hota)."""
+        rows = []
+        for label, obj in (("client", self.client), ("session", getattr(self.client, "s", None))):
+            if obj is None:
+                continue
+            names = [n for n in dir(obj) if re.search(r"sid|session|socket|ws|upload|file|media|attach|image", n, re.I)
+                     and not n.startswith("__")]
+            desc = []
+            for n in names[:40]:
+                try:
+                    v = getattr(obj, n)
+                except Exception:
+                    continue
+                desc.append(n + ("()" if callable(v) else "[{}]".format(len(str(v)) if v is not None else "None")))
+            rows.append("{}: {}".format(label, ", ".join(desc) or "-"))
+        self.log("info", "Library me (naam[lambai]): " + " | ".join(rows)[:1200])
+
+    NATIVE = ("send_file", "send_media", "upload_file", "send_attachment", "send_image", "send_document", "upload")
+
+    def _native_send(self, name, chat_id, path, caption=""):
+        fn = getattr(self.client, name)
+        try:
+            import inspect
+            params = list(inspect.signature(fn).parameters)
+        except (TypeError, ValueError):
+            params = []
+        if caption and len(params) >= 3:
+            return fn(chat_id, str(path), caption)
+        return fn(chat_id, str(path))
 
     def _prime(self):
         """Files server pehli baar milne par apna drscc cookie deta hai - pehle ek halki request se le lo."""
@@ -485,21 +551,37 @@ class Backend:
 
     def _save_st(self):
         try:
-            p = Path(UP_STRATEGY_FILE); p.parent.mkdir(parents=True, exist_ok=True)
+            p = Path(os.path.expanduser(UP_STRATEGY_FILE)); p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(json.dumps(self._up_st))
         except Exception:
             pass
 
+    def _real_sid_strats(self):
+        """Asli sid wale tareeke - pehle ye aazmaye jaate hain (sid='a' wale 403 de rahe the)."""
+        out = []
+        for lab in self._sid_candidates():
+            for csrf in ("drscc", "zchat", "none"):
+                for tkp in (False, True):
+                    out.append({"sid": lab, "hdr": "browser", "csrf": csrf, "cookies": "jar", "ctype": "mime", "tkp": tkp})
+            out.append({"sid": lab, "hdr": "browser", "csrf": "drscc", "cookies": "all", "ctype": "mime", "tkp": True})
+        return out
+
     def send_media(self, chat_id, path, caption=""):
         """Photo / video / document upload. Server ka jawab (chhota snippet) lautata hai."""
         p = Path(path)
+        if self._up_st and self._up_st.get("native"):
+            r = self._native_send(self._up_st["native"], chat_id, p, caption)
+            return str(r)[:300]
         mime, _ = media_kind(p)
         data = p.read_bytes()                      # bytes: retry me bhi poori file jaati hai
         name = orig_name(p)
         last = "upload fail"
         self._prime()
-        for st in ([self._up_st] if self._up_st else STRATS[:2]):
-            resp = self._attempt(chat_id, name, data, mime, caption, st)
+        for st in ([self._up_st] if self._up_st else (self._real_sid_strats()[:2] + STRATS[:1])):
+            try:
+                resp = self._attempt(chat_id, name, data, mime, caption, st)
+            except ArattaiError as e:              # saved tareeke ka sid ab nahi mila
+                last = str(e); continue
             ok, body = self._judge(resp)
             if ok:
                 if self._up_st != st:
@@ -515,11 +597,34 @@ class Backend:
         self._prime()
         cks = sorted({"{}@{}".format(c.name, c.domain) for c in self.client.s.http.cookies})
         self.log("info", "Cookies (naam@domain): " + ", ".join(cks)[:700])
-        ws = self._ws_sid()
-        self.log("info", "WebSocket sid: " + ("mila ({} akshar)".format(len(ws)) if ws else "NAHI mila (ws wale tareeke skip honge)"))
+        self._introspect()
+        self._sid_cache = (0.0, "")
+        cands = self._sid_candidates()
+        self.log("info", "Session id mile: " + (", ".join("{} ({} akshar)".format(k, len(v)) for k, v in cands.items())
+                                                 or "KOI NAHI - sirf sid=a bachta hai (jo pichhli baar 403 de chuka)"))
+
+        # 1) Library ka apna upload function ho to sabse pehle wahi (wo sahi headers khud lagata hai)
+        natives = [n for n in self.NATIVE if callable(getattr(self.client, n, None))]
+        if natives:
+            import tempfile
+            tmp = Path(tempfile.gettempdir()) / "upload-test.txt"
+            tmp.write_bytes(b"Arattai tool upload test")
+            for n in natives:
+                try:
+                    r = self._native_send(n, chat_id, tmp)
+                    self.log("ok", "library ka {}() chala: {}".format(n, str(r)[:150]))
+                    self._up_st = {"native": n}
+                    self._save_st()
+                    self.log("ok", "Upload tareeka mil gaya (library {}). Test chat me 'upload-test.txt' check karein.".format(n))
+                    return True
+                except Exception as e:
+                    self.log("warn", "library {}() -> {!r}".format(n, e)[:300])
+
+        # 2) Asli sid ke saath, phir purane sid=a wale (jo upar ke 22 the) ka chhota hissa
+        plan = self._real_sid_strats() + STRATS[:4]
         shown = False
-        for i, st in enumerate(STRATS, 1):
-            if st["sid"] == "ws" and not ws:
+        for i, st in enumerate(plan, 1):
+            if st["sid"] == "ws" and "ws" not in cands:
                 continue
             try:
                 resp = self._attempt(chat_id, "upload-test.txt", b"Arattai tool upload test", "text/plain", "", st)
@@ -536,7 +641,8 @@ class Backend:
             if not shown:
                 shown = True
                 self.log("info", "Pehle response ke headers: " + ", ".join("{}: {}".format(k, v[:80]) for k, v in resp.headers.items())[:1400])
-        self.log("err", "Koi bhi upload tareeka nahi chala - upar ki saari lines copy karke bhejein.")
+        self.log("err", "Koi bhi upload tareeka nahi chala - upar ki saari lines (khaas kar 'Library me' aur "
+                        "'Session id mile') copy karke bhejein.")
         return False
 
 
