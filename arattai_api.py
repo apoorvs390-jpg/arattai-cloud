@@ -199,6 +199,8 @@ class Backend:
             self.log("info", "Saved session nahi chali: " + repr(e)[:120])
             return False
         self.client = c
+        self._hook_lib_logs()
+        self._refresh_ws_token()                # saved token purana ho sakta hai -> WebSocket (sid) ke liye naya
         persist_session(c)
         return True
 
@@ -408,7 +410,14 @@ class Backend:
 
     # ------------------------------------------------------------ sending
     def send_text(self, chat_id, text):
-        return self.client.send(chat_id, text)
+        try:
+            return self.client.send(chat_id, text)
+        except Exception as e:
+            if "x-sid" not in str(e).lower() and "sid" not in str(e).lower():
+                raise
+            self.log("warn", "text: WebSocket sid nahi mila - WS token refresh karke dobara")
+            self._refresh_ws_token()
+            return self.client.send(chat_id, text)
 
     # ------------------------------------------------------------ upload
     def _attempt(self, chat_id, name, data, mime, caption, st):
@@ -448,49 +457,85 @@ class Backend:
             return requests.post(url, data=body, headers=h, timeout=(15, UPLOAD_TIMEOUT))
         return self.client.s.http.post(url, data=body, headers=h, timeout=(15, UPLOAD_TIMEOUT))
 
+    def _hook_lib_logs(self):
+        """pyarattai ki apni warnings (ws error, mtype -17 ...) hamare log me dikhao."""
+        import logging
+        be = self
+
+        class H(logging.Handler):
+            def emit(self, rec):
+                try:
+                    m = rec.getMessage()[:200]
+                    if m != getattr(be, "_last_lib", ""):
+                        be._last_lib = m
+                        be.log("warn", "library: " + m)
+                except Exception:
+                    pass
+        lg = logging.getLogger("pyarattai")
+        if not any(getattr(h, "_vsk", False) for h in lg.handlers):
+            h = H(logging.WARNING); h._vsk = True
+            lg.addHandler(h)
+            if lg.level == logging.NOTSET or lg.level > logging.WARNING:
+                lg.setLevel(logging.WARNING)
+
+    def _refresh_ws_token(self):
+        """Saved login se aaye purane x-tkp-token ko hata kar naya mint karo (WebSocket isi se login karta hai).
+        Purana token ho to WS turant band (mtype -17) -> sid nahi milta -> upload/text 403."""
+        c = self.client
+        jar = c.s.http.cookies
+        for ck in [x for x in jar if x.name == "x-tkp-token"]:
+            try:
+                jar.clear(ck.domain, ck.path, ck.name)
+            except Exception:
+                pass
+        a = Auth(c.s)
+        a.uid = c.uid
+        for k in ("mobile", "device_id", "registration_id"):
+            if getattr(c, k, None):
+                setattr(a, k, getattr(c, k))
+        tok = None
+        try:
+            a.establish_chat_session()
+            tok = a.mint_x_tkp_token()
+            if not tok:
+                a.fetch_session_meta()
+                tok = c.s._find_cookie("x-tkp-token")
+        except Exception as e:
+            self.log("warn", "WS token refresh error: " + repr(e)[:150])
+        if tok:
+            c.session_id = tok
+            persist_session(c)
+        self.log("ok" if tok else "err", "WS token (x-tkp-token) naya mila" if tok else
+                 "WS token naya NAHI mila - Logout karke QR se dobara login karein")
+        return bool(tok)
+
     def _ws_sid(self):
         t, sid = self._sid_cache
-        if time.time() - t < 90:
+        if sid and time.time() - t < 90:
             return sid
-        sid, why = "", ""
-        for name in ("_fresh_ws_sid", "fresh_ws_sid", "get_ws_sid", "ws_sid", "_ws_sid"):
-            fn = getattr(self.client, name, None)
-            if fn is None:
-                continue
-            try:
-                v = fn() if callable(fn) else fn
-                if isinstance(v, str) and v.strip():
-                    sid = v.strip(); break
-            except Exception as e:
-                why = "{}(): {!r}".format(name, e)[:200]
-        if not sid and why and why != getattr(self, "_ws_why", ""):
-            self._ws_why = why
-            self.log("warn", "WebSocket sid nikalte waqt error: " + why)
+        self._hook_lib_logs()
+        sid = ""
+        try:
+            sid = self.client._fresh_ws_sid() or ""
+        except Exception as e:
+            self.log("warn", "WebSocket error: " + repr(e)[:150])
+        if not sid:
+            self.log("warn", "WebSocket se sid nahi mila - WS token refresh karke dobara...")
+            if self._refresh_ws_token():
+                try:
+                    sid = self.client._fresh_ws_sid() or ""
+                except Exception as e:
+                    self.log("warn", "WebSocket error: " + repr(e)[:150])
+        self.log("ok" if sid else "err", "WebSocket sid " + ("mil gaya ({} akshar)".format(len(sid)) if sid else
+                 "phir bhi NAHI mila (server WebSocket se nahi jud pa raha)"))
         self._sid_cache = (time.time(), sid)
         return sid
 
     def _sid_candidates(self):
-        """x-cliq-sid ke liye asli session id ke sabhi mumkin source. {label: value} (khaali wale hata kar)."""
-        out = {"ws": self._ws_sid()}
-        c, s = self.client, getattr(self.client, "s", None)
-        for label, obj in (("sess", c), ("ssess", s)):
-            for attr in ("session_id", "sid", "chat_sid", "wms_sid"):
-                v = getattr(obj, attr, None) if obj is not None else None
-                if isinstance(v, (str, int)) and str(v).strip() and str(v) != "a":
-                    out.setdefault(label, str(v).strip())
-                    break
-        try:   # login ke waqt session.json me likha session_id (Auth.establish_chat_session se)
-            blob = json.loads(Path(os.path.expanduser(SESSION_FILE)).read_text())
-            v = blob.get("session_id") or blob.get("sid")
-            if v:
-                out.setdefault("file", str(v).strip())
-        except Exception:
-            pass
-        seen, uniq = set(), {}
-        for k, v in out.items():               # ek hi value do naam se na aazmayein
-            if v and v not in seen:
-                seen.add(v); uniq[k] = v
-        return uniq
+        """x-cliq-sid = WebSocket handshake ka sid. (session.json wala session_id x-tkp-token hai -
+        library khud likhti hai ki wo accept NAHI hota.)"""
+        sid = self._ws_sid()
+        return {"ws": sid} if sid else {}
 
     def _introspect(self):
         """Library me kya hai - sirf naam/lambai (koi secret log nahi hota)."""
@@ -600,8 +645,10 @@ class Backend:
         self._introspect()
         self._sid_cache = (0.0, "")
         cands = self._sid_candidates()
-        self.log("info", "Session id mile: " + (", ".join("{} ({} akshar)".format(k, len(v)) for k, v in cands.items())
-                                                 or "KOI NAHI - sirf sid=a bachta hai (jo pichhli baar 403 de chuka)"))
+        if not cands:
+            self.log("err", "WebSocket sid ke bina upload (aur text) nahi chalega. Upar 'library:' wali lines bhejein. "
+                            "Pehle Logout -> QR se dobara login karke try karein.")
+            return False
 
         # 1) Library ka apna upload function ho to sabse pehle wahi (wo sahi headers khud lagata hai)
         natives = [n for n in self.NATIVE if callable(getattr(self.client, n, None))]
