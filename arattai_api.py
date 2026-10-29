@@ -199,6 +199,7 @@ class Backend:
             self.log("info", "Saved session nahi chali: " + repr(e)[:120])
             return False
         self.client = c
+        self._install(c)
         self._hook_lib_logs()
         self._refresh_ws_token()                # saved token purana ho sakta hai -> WebSocket (sid) ke liye naya
         persist_session(c)
@@ -232,6 +233,7 @@ class Backend:
                                    "registration_id": a.registration_id, "session_id": a.session_id})
         self._register_signal(client)
         persist_session(client)
+        self._install(client)
         self.client, self._pending = client, None
         return True, "ok"
 
@@ -324,6 +326,7 @@ class Backend:
         client = ArattaiClient(s, {"uid": a.uid, "mobile": a.mobile, "device_id": a.device_id,
                                    "registration_id": a.registration_id, "session_id": a.session_id})
         client.get_chats(limit=1)                      # sach me login hua ya nahi
+        self._install(client)
         self._register_signal(client)
         persist_session(client)
         self.client, self._pending = client, None
@@ -457,6 +460,11 @@ class Backend:
             return requests.post(url, data=body, headers=h, timeout=(15, UPLOAD_TIMEOUT))
         return self.client.s.http.post(url, data=body, headers=h, timeout=(15, UPLOAD_TIMEOUT))
 
+    def _install(self, client):
+        """Library text bhejte waqt apna WebSocket kholti hai - use hamara (browser-jaisa) tareeka do."""
+        be = self
+        client._fresh_ws_sid = lambda timeout=15.0: (be._ws_sid() or None)
+
     def _hook_lib_logs(self):
         """pyarattai ki apni warnings (ws error, mtype -17 ...) hamare log me dikhao."""
         import logging
@@ -490,6 +498,7 @@ class Backend:
                 pass
         a = Auth(c.s)
         a.uid = c.uid
+        self._auth = a                          # iska _tabid WebSocket me bhi wahi bhejna hai
         for k in ("mobile", "device_id", "registration_id"):
             if getattr(c, k, None):
                 setattr(a, k, getattr(c, k))
@@ -509,25 +518,76 @@ class Backend:
                  "WS token naya NAHI mila - Logout karke QR se dobara login karein")
         return bool(tok)
 
+    WS_HOST = "in1-wms.arattai.in"
+
+    def _ws_cookie_header(self, browser_like):
+        jar = self.client.s.http.cookies
+        if not browser_like:                     # library jaisa: sab cookies (do JSESSIONID bhi)
+            return "; ".join("{}={}".format(c.name, c.value) for c in jar)
+        picked = {}
+        for c in jar:                            # browser jaisa: sirf wahi jo in1-wms.arattai.in par jaati
+            d = (c.domain or "").lower()
+            if d.startswith("."):
+                ok = self.WS_HOST == d[1:] or self.WS_HOST.endswith(d)
+            else:
+                ok = d in (self.WS_HOST, "")
+            if ok:
+                picked[c.name] = c.value         # same naam do baar ho to ek hi
+        return "; ".join("{}={}".format(k, v) for k, v in picked.items())
+
+    def _try_ws(self, browser_cookies, same_tab, timeout=10.0):
+        """Ek WebSocket handshake, apne tareeke se (library ka WSClient, par cookie/tabid hamare)."""
+        from pyarattai.ws import WSClient
+        c = self.client
+        ws = WSClient(c.s, uid=c.uid or "0", dname=c.mobile or "pyarattai", auto_reconnect=False)
+        ws._cookie_header = lambda: self._ws_cookie_header(browser_cookies)
+        tab = getattr(getattr(self, "_auth", None), "_tabid", None)
+        if same_tab and tab:
+            orig = ws._build_url
+            ws._build_url = lambda: re.sub(r"tid=[^&]*", "tid=" + tab, orig())
+        box = {}
+        ws.on_sid(lambda s: box.update(sid=s))
+        ws.on_frame(lambda f: box.update(mt=str(f.get("mtype"))))
+        ws.start(blocking=False)
+        end = time.time() + timeout
+        while time.time() < end and not box.get("sid"):
+            if box.get("mt") == "-17" or not (ws._thread and ws._thread.is_alive()):
+                break
+            time.sleep(0.25)
+        ws.stop()
+        return box.get("sid") or "", box.get("mt")
+
     def _ws_sid(self):
         t, sid = self._sid_cache
         if sid and time.time() - t < 90:
             return sid
         self._hook_lib_logs()
         sid = ""
-        try:
-            sid = self.client._fresh_ws_sid() or ""
-        except Exception as e:
-            self.log("warn", "WebSocket error: " + repr(e)[:150])
-        if not sid:
-            self.log("warn", "WebSocket se sid nahi mila - WS token refresh karke dobara...")
-            if self._refresh_ws_token():
+        ways = [(True, True, "browser cookies + same tab"), (True, False, "browser cookies"),
+                (False, True, "sab cookies + same tab"), (False, False, "library default")]
+        if getattr(self, "_ws_way", None) in [w[:2] for w in ways]:   # jo pehle chala wo pehle
+            ways.sort(key=lambda w: w[:2] != self._ws_way)
+        for refreshed in (False, True):
+            if refreshed:
+                self.log("warn", "WebSocket se sid nahi mila - WS token refresh karke dobara...")
+                if not self._refresh_ws_token():
+                    break
+            for bc, st, label in ways:
+                if st and not getattr(getattr(self, "_auth", None), "_tabid", None):
+                    continue
                 try:
-                    sid = self.client._fresh_ws_sid() or ""
+                    sid, mt = self._try_ws(bc, st)
                 except Exception as e:
-                    self.log("warn", "WebSocket error: " + repr(e)[:150])
+                    sid, mt = "", repr(e)[:80]
+                self.log("ok" if sid else "warn", "WebSocket ({}): {}".format(
+                    label, "sid mila" if sid else "nahi (mtype {})".format(mt)))
+                if sid:
+                    self._ws_way = (bc, st)
+                    break
+            if sid:
+                break
         self.log("ok" if sid else "err", "WebSocket sid " + ("mil gaya ({} akshar)".format(len(sid)) if sid else
-                 "phir bhi NAHI mila (server WebSocket se nahi jud pa raha)"))
+                 "phir bhi NAHI mila - Arattai is server ka WebSocket login maan nahi raha"))
         self._sid_cache = (time.time(), sid)
         return sid
 
