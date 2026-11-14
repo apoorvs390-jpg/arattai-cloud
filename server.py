@@ -426,6 +426,12 @@ def api_worker():
             elif cmd == "chats" and be.client:
                 items = be.list_chats()
                 c["out"].append({"names": [i["title"] for i in items], "items": items, "debug": ""}); c["ev"].set()
+            elif cmd == "uid" and be.client:
+                try:
+                    ok = be.uid_from_phone(c["phone"])
+                    log("ok" if ok else "warn", "User ID set ho gaya" + ("" if ok else " par WebSocket token ab bhi nahi bana"))
+                except Exception as e:
+                    log("err", "User ID nahi nikla: " + repr(e)[:150])
             elif cmd == "diag" and be.client:
                 be.list_chats()
                 chat, err = be.resolve(c["chat"])
@@ -543,6 +549,14 @@ class H(BaseHTTPRequestHandler):
             code = re.sub(r"\D", "", d.get("code", ""))
             if not code: return self.send_json({"error": "OTP likhein"}, 400)
             cmds.put({"cmd": "otp", "code": code}); self.send_json({"ok": True})
+        elif self.path == "/api/uid" and BACKEND == "api":
+            if S["state"] != "ready":
+                return self.send_json({"error": "Pehle Arattai se connect karein"}, 400)
+            try:
+                phone = ab.normalize_phone(d.get("phone", ""))
+            except ValueError as e:
+                return self.send_json({"error": str(e)}, 400)
+            cmds.put({"cmd": "uid", "phone": phone}); self.send_json({"ok": True})
         elif self.path == "/api/diag" and BACKEND == "api":
             if S["state"] != "ready":
                 return self.send_json({"error": "Pehle Arattai se connect karein"}, 400)
