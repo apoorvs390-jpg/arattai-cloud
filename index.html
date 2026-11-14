@@ -33,6 +33,8 @@ button.p{background:var(--y);border-color:var(--y);font-weight:700;color:#3b2c00
 <nav><a data-p="dash">Dashboard</a><a data-p="connect">Connect Arattai</a><a data-p="bc">Broadcast</a><a data-p="groups">Groups</a><a data-p="contacts">Contacts</a></nav>
 <div class="sf"><span class="dot" id="dot"></span><span id="stl">...</span><button id="lo" class="d" style="display:none;width:100%;margin-top:8px" onclick="logout()">Logout</button></div><div class="sf" style="border:0;padding-top:0">Arattai v1.0</div></aside>
 <main>
+<div class="ban" id="uidBan" style="display:none;background:#ffe9e0;border-color:#f0a98a"><b>Aapka Arattai user ID nahi mila</b> - bina iske text/upload nahi jayega. Apna Arattai number likhein (sirf lookup hota hai, OTP nahi jaata):
+<div class="row" style="margin-top:8px"><input type="text" id="uph2" placeholder="Arattai number (10 digit)" style="max-width:240px" inputmode="tel"><button class="p" onclick="uidFix('uph2')">User ID nikalo</button></div></div>
 
 <section class="pg" id="dash"><h1>Dashboard</h1><div class="sub">Connection aur summary</div>
 <div class="g2"><div class="c"><h3>Connection</h3><div class="big" id="dsSt">-</div><div class="mu" id="dsMsg"></div><p><button class="p" onclick="show('connect')">Connect / Login</button></p></div>
@@ -89,7 +91,7 @@ async function logout(){if(!confirm('Logout karein?\nAapka Arattai login hat jay
  const r=await call('logout',{});if(r.error)return alert(r.error);
  lockUntil=Date.now()+10000;recips=[];saveR();renderR();chats=[];loaded=false;sel.groups.clear();sel.contacts.clear();lastFailed=[];files=[];renderF();$('text').value='';
  ['nG','nC'].forEach(i=>$(i).textContent='0');['groups','contacts'].forEach(renderList);$('qrArea').innerHTML='<p class="mu">QR ban raha hai...</p>';show('connect');poll()}
-async function uidFix(){const r=await call('uid',{phone:$('uph').value});if(r.error)return alert(r.error);show('bc');poll()}
+async function uidFix(id){const r=await call('uid',{phone:$(id||'uph').value});if(r.error)return alert(r.error);show('bc');poll()}
 async function diag(){const r=await call('diag',{chat:$('dg').value});if(r.error)return alert(r.error);show('bc');poll()}
 async function forgetMe(){if(!confirm('Arattai se logout hoga aur server se aapka saara data delete hoga. Pakka?'))return;const r=await call('forget',{});alert(r.error||'Data delete ho gaya.');location.reload()}
 function renderR(){$('added').textContent=recips.length;$('tags').innerHTML=recips.map((n,i)=>`<span class="tag">${esc(lbl(n))}<b onclick="recips.splice(${i},1);saveR();renderR()">&times;</b></span>`).join('')}
@@ -129,6 +131,8 @@ async function poll(){const d=await call('status');
  $('lgBox').style.display=d.state==='login'?'block':'none';$('lo').style.display=(d.state==='ready'||d.state==='sending')?'block':'none';if(d.need!=='qr')$('qrArea').innerHTML='Phone me Arattai &gt; Linked devices &gt; Link a device, phir QR scan karein.';$('phRow').style.display=d.need==='otp'?'none':'flex';$('otpRow').style.display=d.need==='otp'?'flex':'none';
  if(d.need==='qr'&&d.qr)$('qrArea').innerHTML=d.qr.svg?`<div style="width:230px;margin:auto;background:#fff">${d.qr.svg.startsWith('data:')?`<img src="${d.qr.svg}" alt="QR" style="width:100%;display:block">`:d.qr.svg}</div><p class="mu" style="text-align:center">${esc(d.qr.msg||'')}</p>`:`<p class="mu">${esc(d.qr.msg||'QR ban raha hai...')}</p>`;
  if(d.state==='ready'&&!loaded&&Date.now()>lockUntil)loadChats(); if(d.state!=='ready'&&d.state!=='sending')loaded=false;
+ let miss=false;for(const x of d.log||[]){if(/uid NAHI mila|uid \(user id\) nahi mila/.test(x.m))miss=true;if(/uid mila|User ID set ho gaya/.test(x.m))miss=false}
+ $('uidBan').style.display=miss&&d.state==='ready'?'block':'none';
  const j=d.job;if(j){const t=j.total||0;$('prog').textContent=`${j.done||0}/${t} · safal ${j.ok||0} · fail ${j.fail||0}${j.current?' · '+j.current:''}`;
   $('fill').style.width=t?Math.round((j.done||0)*100/t)+'%':'0';$('sOk').textContent=j.ok||0;$('sFail').textContent=j.fail||0;
   $('dsJob').textContent=`Safal ${j.ok||0}, Fail ${j.fail||0} (${j.done||0}/${t})`;lastFailed=j.failed||[];
