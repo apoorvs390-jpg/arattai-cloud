@@ -98,6 +98,38 @@ KEEPALIVE_SEC = 600
 RATE_PAUSE_SEC = 60
 MAX_CONSEC_FAIL = 5
 QR_AUTH, QR_WEB = "https://accounts.arattai.in", "https://web.arattai.in"
+_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+_ID_KEYS = ("zuid", "identifier", "user_id", "userid", "uid")
+
+
+def _digits(v):
+    v = str(v if v is not None else "").strip()
+    return v if v.isdigit() and len(v) >= 7 else ""
+
+
+def find_id(obj, depth=0):
+    """JSON me zuid/identifier/uid jaisi key ke andar ka lamba number dhoondho."""
+    if depth > 6:
+        return ""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if str(k).lower() in _ID_KEYS and _digits(v):
+                return _digits(v)
+        for v in obj.values():
+            r = find_id(v, depth + 1)
+            if r:
+                return r
+    elif isinstance(obj, list):
+        for v in obj:
+            r = find_id(v, depth + 1)
+            if r:
+                return r
+    return ""
+
+
+def mask_id(u):
+    u = str(u or "")
+    return (u[:3] + "***" + u[-2:]) if len(u) > 6 else "?"
 
 
 def write_log(rows):
@@ -299,7 +331,7 @@ class Backend:
                 fails = 0
                 if code == 200:
                     on_update({"state": "finishing", "svg": "", "msg": "Scan ho gaya, login complete ho raha hai..."})
-                    self._finish_qr(s)
+                    self._finish_qr(s, r.json())
                     on_update({"state": "ready", "svg": "", "msg": "ok"})
                     return
                 if code == 401:                       # QR expire -> naya
@@ -315,13 +347,56 @@ class Backend:
         if not stop.is_set():
             on_update({"state": "error", "svg": "", "msg": "QR expire ho gaya - dobara QR dikhao"})
 
-    def _finish_qr(self, s):
+    def _discover_uid(self, s, a, final=None):
+        """QR login me phone number nahi hota, isliye user id (zuid) kai jagah se dhoondho. -> (uid, source)"""
+        if _digits(a.uid):
+            return _digits(a.uid), "session"
+        for n in ("zuid", "uid", "ZUID"):
+            v = _digits(s._find_cookie(n))
+            if v:
+                return v, "cookie " + n
+        v = find_id(final)
+        if v:
+            return v, "QR response"
+        for path in ("/webclient/v1/account/self/user/self", "/webclient/v1/account/self/user/self/info"):
+            try:
+                r = s.http.get(QR_AUTH + path, timeout=20, headers={
+                    "User-Agent": _UA, "Accept": "application/json",
+                    "X-ZCSRF-TOKEN": "iamcsrcoo=" + (s._find_cookie("iamcsr") or "")})
+                v = find_id(r.json())
+                if v:
+                    return v, "accounts profile"
+            except Exception:
+                pass
+        return "", ""
+
+    @staticmethod
+    def _reset_tkp(s, a):
+        """uid=0 se bana purana x-tkp-token aur tabid hata do (token uid se bandha hota hai)."""
+        for ck in [x for x in s.http.cookies if x.name == "x-tkp-token"]:
+            try:
+                s.http.cookies.clear(ck.domain, ck.path, ck.name)
+            except Exception:
+                pass
+        a._tabid = None
+
+    def _finish_qr(self, s, final=None):
         a = Auth(s)
         a.establish_chat_session()
-        a.mint_x_tkp_token()
-        a.fetch_session_meta()
-        if not a.uid:
-            a.uid = a.identifier or s._find_cookie("zuid")
+        try:
+            a.fetch_session_meta()                     # uid / device ids, jo mil sakein
+        except Exception as e:
+            self.log("warn", "session meta: " + repr(e)[:100])
+        uid, src = self._discover_uid(s, a, final)
+        if uid:
+            a.uid = uid
+            self.log("ok", "Aapka Arattai uid mila: {} ({})".format(mask_id(uid), src))
+        else:
+            self.log("err", "uid NAHI mila - WebSocket kaam nahi karega. Connect page par 'User ID nikalo' (number se) chalayein ya OTP login karein.")
+        self._reset_tkp(s, a)
+        if a.uid:
+            a.mint_x_tkp_token()                       # ab sahi uid ke saath
+        self._auth = a
         a.save(SESSION_FILE)
         client = ArattaiClient(s, {"uid": a.uid, "mobile": a.mobile, "device_id": a.device_id,
                                    "registration_id": a.registration_id, "session_id": a.session_id})
@@ -498,6 +573,13 @@ class Backend:
                 pass
         a = Auth(c.s)
         a.uid = c.uid
+        if not _digits(a.uid):                  # uid nahi/galat -> token bhi galat banega (uname=0)
+            uid, src = self._discover_uid(c.s, a)
+            if uid:
+                a.uid = c.uid = uid
+                self.log("ok", "uid mila: {} ({})".format(mask_id(uid), src))
+            else:
+                self.log("err", "uid (user id) nahi mila - 'User ID nikalo' (number se) chalayein ya OTP login karein")
         self._auth = a                          # iska _tabid WebSocket me bhi wahi bhejna hai
         for k in ("mobile", "device_id", "registration_id"):
             if getattr(c, k, None):
@@ -517,6 +599,24 @@ class Backend:
         self.log("ok" if tok else "err", "WS token (x-tkp-token) naya mila" if tok else
                  "WS token naya NAHI mila - Logout karke QR se dobara login karein")
         return bool(tok)
+
+    def uid_from_phone(self, phone):
+        """Number se Arattai uid (sirf lookup - OTP nahi jaata), phir WebSocket token naya. True = token bana."""
+        if not self.client:
+            raise ArattaiError("Pehle login karein")
+        s = Session()
+        a = Auth(s)
+        a.start()
+        a.lookup(phone)
+        uid = _digits(a.identifier)
+        if not uid:
+            raise ArattaiError("Is number ka uid nahi mila")
+        self.client.uid = uid
+        self._sid_cache = (0.0, "")
+        self.log("ok", "uid mila: {} (number se)".format(mask_id(uid)))
+        ok = self._refresh_ws_token()
+        persist_session(self.client)
+        return ok
 
     WS_HOST = "in1-wms.arattai.in"
 
