@@ -1,144 +1,224 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Arattai Dissemination Tool</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sangh Wire — RSS Leadership Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--y:#f5c400;--yd:#7a5a00;--bg:#fffdf3;--bd:#f1e4a9;--tx:#2b2200;--mu:#7d7556}
-*{box-sizing:border-box}body{margin:0;display:flex;height:100vh;font:13px/1.4 system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--tx)}
-aside{width:200px;background:#fff;border-right:1px solid var(--bd);display:flex;flex-direction:column;flex:none}
-.brand{padding:16px 18px 12px;border-bottom:3px solid var(--y)}.brand b{font-size:17px;color:var(--yd);display:block}.brand small{font-size:10px;color:#5b4a00}
-nav{padding-top:14px;flex:1}nav a{display:block;padding:11px 18px;color:#4a3f10;cursor:pointer;text-decoration:none}nav a.on{background:#fff3c4;border-left:3px solid var(--y);padding-left:15px}
-.sf{padding:10px 18px;border-top:1px solid var(--bd);font-size:11px;color:var(--mu)}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#bbb;margin-right:6px}
-main{flex:1;overflow:auto;padding:20px 22px}h1{margin:0;font-size:18px}.sub{color:var(--mu);margin:2px 0 14px}
-.ban{background:#fff6cc;border:1px solid #f0d56a;border-radius:6px;padding:9px 13px;margin-bottom:14px;font-size:12px}
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}.col>*+*{margin-top:14px}
-.c{background:#fff;border:1px solid var(--bd);border-radius:8px;padding:16px}.c h3{margin:0 0 10px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--yd)}
-label.l{display:block;font-size:12px;color:var(--mu);margin:2px 0 4px}
-input[type=text],input[type=number],input[type=password],textarea,select{width:100%;border:1px solid #eadfa6;border-radius:6px;padding:9px;font:inherit;background:#fff;color:inherit}
-textarea{resize:vertical;min-height:70px}button{font:inherit;border:1px solid #eadfa6;background:#fff;border-radius:6px;padding:7px 12px;cursor:pointer;color:var(--tx)}
-button.p{background:var(--y);border-color:var(--y);font-weight:700;color:#3b2c00}button.d{background:#dc2626;border-color:#dc2626;color:#fff;font-weight:700}button:disabled{opacity:.5;cursor:not-allowed}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row.sp{justify-content:space-between}.mu{color:var(--mu);font-size:12px}
-.tags{display:flex;flex-wrap:wrap;gap:6px;border:1px solid var(--bd);border-radius:6px;padding:8px;min-height:44px;margin-top:8px}
-.tag{background:#fff3c4;border:1px solid #f0d56a;border-radius:14px;padding:3px 10px;font-size:12px}.tag b{cursor:pointer;margin-left:5px;color:#8a6d00}
-.live{background:#fff3c4;border:1px solid #f0d56a;border-radius:6px;padding:10px;margin-top:10px;font-size:14px}.live input{margin-right:6px}
-.drop{border:2px dashed #f0d56a;border-radius:8px;padding:26px 10px;text-align:center;cursor:pointer;background:#fffbe6}.drop small{display:block;color:var(--mu);font-size:10px}
-.files{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.f{border:1px solid var(--bd);border-radius:6px;padding:6px;font-size:11px;max-width:120px}.f img,.f .ic{width:44px;height:50px;object-fit:cover;display:flex;align-items:center;justify-content:center;background:#fff3c4;font-weight:700;margin-bottom:4px}.f b{cursor:pointer}
-.bar{height:5px;background:var(--bd);border-radius:3px;margin:12px 0}.bar i{display:block;height:100%;background:var(--y);border-radius:3px;width:0}
-.st{display:grid;grid-template-columns:1fr 1fr;gap:12px}.st div{border:2px solid var(--y);border-radius:10px;text-align:center;padding:10px}.st b{display:block;font-size:20px}
-#log{height:190px;overflow:auto;border:1px solid var(--bd);border-radius:6px;padding:6px 8px;margin-top:12px;font:11px/1.5 Consolas,monospace;background:#fff}
-.ok{color:#0a7d2c}.err{color:#c0262d}.warn{color:#b26a00}.info{color:#666}
-.li{display:flex;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid #f6efc9;cursor:pointer}.li .nm{flex:1}
-.fl{margin-top:10px;font-size:12px;border:1px solid #f3c6c6;background:#fff5f5;border-radius:6px;padding:8px}.fl div{padding:2px 0}
-.big{font-size:22px;font-weight:700}.pg{display:none}.pg.on{display:block}
-</style></head><body>
-<aside><div class="brand"><b>Arattai</b><small>Dissemination Tool</small></div>
-<nav><a data-p="dash">Dashboard</a><a data-p="connect">Connect Arattai</a><a data-p="bc">Broadcast</a><a data-p="groups">Groups</a><a data-p="contacts">Contacts</a></nav>
-<div class="sf"><span class="dot" id="dot"></span><span id="stl">...</span><button id="lo" class="d" style="display:none;width:100%;margin-top:8px" onclick="logout()">Logout</button></div><div class="sf" style="border:0;padding-top:0">Arattai v1.0</div></aside>
-<main>
-<div class="ban" id="uidBan" style="display:none;background:#ffe9e0;border-color:#f0a98a"><b>Aapka Arattai user ID nahi mila</b> - bina iske text/upload nahi jayega. Apna Arattai number likhein (sirf lookup hota hai, OTP nahi jaata):
-<div class="row" style="margin-top:8px"><input type="text" id="uph2" placeholder="Arattai number (10 digit)" style="max-width:240px" inputmode="tel"><button class="p" onclick="uidFix('uph2')">User ID nikalo</button></div></div>
-
-<section class="pg" id="dash"><h1>Dashboard</h1><div class="sub">Connection aur summary</div>
-<div class="g2"><div class="c"><h3>Connection</h3><div class="big" id="dsSt">-</div><div class="mu" id="dsMsg"></div><p><button class="p" onclick="show('connect')">Connect / Login</button></p></div>
-<div class="c"><h3>Aapki Arattai list</h3><div class="row"><div><span class="big" id="nG">0</span><div class="mu">Groups</div></div><div style="width:30px"></div><div><span class="big" id="nC">0</span><div class="mu">Contacts</div></div></div><p><button onclick="loadChats(true)">Refresh list</button></p></div>
-<div class="c"><h3>Last broadcast</h3><div id="dsJob" class="mu">Abhi tak kuch nahi bheja</div></div></div></section>
-
-<section class="pg" id="connect"><h1>Connect Arattai</h1><div class="sub">QR scan ya phone number se login (login saved rehta hai)</div>
-<div class="g2"><div class="col"><div class="c"><h3>Server</h3>
-<label class="l">Invite code / Access token</label><div class="row"><input type="password" id="tok" style="flex:1"><button onclick="saveTok()">Save</button></div>
-<label class="l" style="margin-top:8px">Server URL (khaali = yahi site)</label><input type="text" id="api" placeholder="https://...">
-<div class="row" style="margin-top:12px"><button class="p" onclick="act('start')">Connect / Login</button><button onclick="act('close')">Disconnect</button><button class="d" onclick="logout()">Logout</button><button onclick="forgetMe()">Logout + data delete</button></div></div>
-<div class="c"><h3>Upload test</h3><div class="mu" style="margin-bottom:8px">Photo/video/document na jaye (HTTP 403) to yahan se test karein. Ek chhoti test file aapke "Test" chat me jayegi; sahi tareeka mil jaye to tool yaad rakhta hai.</div>
-<div class="row"><input type="text" id="dg" placeholder='Test chat ka naam, jaise: Test 1' style="flex:1"><button class="p" onclick="diag()">Upload test chalao</button></div></div>
-<div class="c"><h3>User ID nikalo</h3><div class="mu" style="margin-bottom:8px">QR login ke baad text/upload na jaye ("WebSocket ... nahi mila" / HTTP 403) to apna Arattai number likhein. Sirf lookup hota hai, OTP nahi jaata.</div>
-<div class="row"><input type="text" id="uph" placeholder="Arattai number (10 digit)" style="flex:1" inputmode="tel"><button class="p" onclick="uidFix()">User ID nikalo</button></div></div></div>
-<div class="col" id="lgBox"><div class="c"><h3>Login by QR</h3><div id="qrArea" class="mu">Phone me Arattai &gt; Linked devices &gt; Link a device, phir QR scan karein.</div><p><button class="p" onclick="act('qr')">QR dikhao</button></p></div>
-<div class="c"><h3>Login by phone number</h3><div id="phRow" class="row"><input type="text" id="ph" placeholder="10 digit number" style="flex:1" inputmode="tel"><select id="och" style="width:auto"><option value="app">App OTP</option><option value="sms">SMS OTP</option></select><button class="p" onclick="sendOtp()">OTP bhejo</button></div>
-<div id="otpRow" class="row" style="display:none"><input type="text" id="otp" placeholder="OTP" style="flex:1" inputmode="numeric"><button class="p" onclick="verOtp()">Verify</button></div></div></div></div></section>
-
-<section class="pg" id="bc"><h1>Bulk Broadcast</h1><div class="sub">Message aur attachments bhejo</div>
-<div class="ban">Delay zaroor rakho, aur pehle Test chats me try karo!</div>
-<div class="g2"><div class="col">
-<div class="c"><h3>Recipients</h3><textarea id="names" placeholder="Chat/group ke naam, ek line me ek (Arattai me jaise dikhte hain bilkul waise)"></textarea>
-<div class="row" style="margin-top:8px"><button class="p" onclick="addNames()">Add karo</button><button onclick="show('groups')">My Groups</button></div>
-<div class="row sp" style="margin-top:10px"><span class="mu">Added: <b id="added">0</b></span><button onclick="recips=[];saveR();renderR()">Clear</button></div><div class="tags" id="tags"></div></div>
-<div class="c"><h3>Settings</h3><div class="row"><div style="flex:1"><label class="l">Min Delay (sec)</label><input type="number" id="dmin" value="10"></div><div style="flex:1"><label class="l">Max Delay (sec)</label><input type="number" id="dmax" value="40"></div></div>
-<div class="live"><label><input type="checkbox" id="live"><b>LIVE MODE</b> - asli groups me bhejna (off ho to sirf "Test" naam wale chats me jayega)</label></div>
-<div class="row" style="margin-top:8px"><label class="mu"><input type="checkbox" id="cap"> Text ko pehli file ke caption me bhejo (sirf English text)</label></div></div></div>
-<div class="col"><div class="c"><h3>Message</h3><label class="l">Caption / Text</label><textarea id="text" style="min-height:105px"></textarea>
-<label class="l" style="margin-top:10px">Attachment (optional)</label><div class="drop" id="drop">Click, drag and drop, ya image copy karke Ctrl+V<small>Images, Videos, Word, PDF</small></div><input type="file" id="fi" multiple hidden><div class="files" id="files"></div></div>
-<div class="c"><h3>Launch</h3><div class="row"><button class="p" id="go" onclick="go()">Start Broadcast</button><button class="d" onclick="act('stop')">Stop</button><span class="mu" id="prog"></span></div>
-<div class="bar"><i id="fill"></i></div><div class="st"><div><b class="ok" id="sOk">0</b><span class="mu">Sent</span></div><div><b class="err" id="sFail">0</b><span class="mu">Failed</span></div></div>
-<div id="fl"></div><div id="log"></div></div></div></div></section>
-
-<section class="pg" id="groups"><h1>Groups</h1><div class="sub" id="groupsCnt">-</div><div class="c" id="groupsBox"></div></section>
-<section class="pg" id="contacts"><h1>Contacts</h1><div class="sub" id="contactsCnt">-</div><div class="c" id="contactsBox"></div></section>
-</main>
+:root{--bg:#f4f2ee;--surf:#fff;--surf2:#f0ede8;--line:#ddd9d0;--ink:#1a1814;--muted:#6b6560;--accent:#b5470f;--blue:#1a5f8a;--bs:rgba(26,95,138,.1);--green:#1e7a4a;--gs:rgba(30,122,74,.1);--orange:#c47200;--os:rgba(196,114,0,.1);--purple:#6b3fa0;--ps:rgba(107,63,160,.1);--red:#b5470f;--rs:rgba(181,71,15,.1);--r:4px;--shadow:0 2px 8px rgba(0,0,0,.07)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1320px;margin:0 auto;padding:28px 20px 80px}
+header{border-bottom:2px solid var(--line);padding-bottom:20px;margin-bottom:24px}
+.top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+.clock{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.ldot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(30,122,74,.5)}70%{box-shadow:0 0 0 7px rgba(30,122,74,0)}100%{box-shadow:0 0 0 0 rgba(30,122,74,0)}}
+h1{font-family:'Source Serif 4',serif;font-weight:700;font-size:clamp(28px,5vw,46px);line-height:1.06;margin-bottom:6px}
+.sub{color:var(--muted);font-size:13px;line-height:1.65;max-width:700px;margin-bottom:12px}
+.scope{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px;line-height:1.9}
+.controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+#btn{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.07em;text-transform:uppercase;background:var(--accent);color:#fff;border:none;padding:10px 22px;border-radius:var(--r);cursor:pointer;font-weight:600;box-shadow:0 2px 6px rgba(181,71,15,.25);transition:background .18s,transform .1s}
+#btn:hover{background:#9a3a08}#btn:active{transform:scale(.97)}#btn:disabled{opacity:.45;cursor:wait}
+.acct{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted)}.acct a{color:var(--muted)}.acct a:hover{color:var(--accent)}
+.lastup{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted)}
+.board{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media(max-width:900px){.board{grid-template-columns:1fr}}
+.col{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow)}
+.col-head{padding:14px 18px;border-bottom:2px solid var(--line);background:var(--surf2)}
+.col-head h2{font-family:'Source Serif 4',serif;font-size:20px;font-weight:700;margin-bottom:2px}
+.col-head .role{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.sec{border-bottom:1px solid var(--line)}.sec:last-child{border-bottom:none}
+.sec-h{display:flex;align-items:center;gap:7px;padding:9px 16px;background:var(--surf2);border-bottom:1px solid var(--line);cursor:pointer;user-select:none}
+.sec-h:hover{background:#e8e4de}
+.sec-h h3{font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink);flex:1;font-weight:600}
+.cnt{font-family:'IBM Plex Mono',monospace;font-size:9px;background:var(--line);color:var(--muted);padding:2px 7px;border-radius:10px}
+.arr{font-size:10px;color:var(--muted)}
+.sec-b.hidden{display:none}
+.card{padding:13px 16px 12px 21px;border-bottom:1px solid var(--line);position:relative;background:var(--surf)}
+.card:hover{background:#faf8f5}.card:last-child{border-bottom:none}
+.card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:2px 0 0 2px}
+.c-all::before{background:#888}
+.c-sp::before{background:var(--blue)}
+.c-pr::before{background:var(--green)}
+.c-iv::before{background:var(--purple)}
+.c-hi::before{background:var(--orange)}
+.c-og::before{background:var(--red)}
+.c-gl::before{background:#0f6b78}
+.col-global{margin-top:22px}
+.col-global .col-head{background:#eef6f7}
+#b-global .sec-b{display:grid;grid-template-columns:1fr 1fr}
+@media(max-width:900px){#b-global .sec-b{grid-template-columns:1fr}}
+#b-global .card{border-right:1px solid var(--line)}
+.badges{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:6px}
+.badge{display:inline-block;padding:2px 6px;border-radius:3px;font-family:'IBM Plex Mono',monospace;font-size:8.5px;letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.b-all{background:#eee;color:#555;border:1px solid #ddd}
+.b-sp{background:var(--bs);color:var(--blue);border:1px solid rgba(26,95,138,.2)}
+.b-pr{background:var(--gs);color:var(--green);border:1px solid rgba(30,122,74,.2)}
+.b-iv{background:var(--ps);color:var(--purple);border:1px solid rgba(107,63,160,.2)}
+.b-hi{background:var(--os);color:var(--orange);border:1px solid rgba(196,114,0,.2)}
+.b-gl{background:#e3f1f3;color:#0f6b78;border:1px solid rgba(15,107,120,.2)}
+.b-og{background:var(--rs);color:var(--red);border:1px solid rgba(181,71,15,.2)}
+.b-src{background:rgba(181,71,15,.08);color:var(--accent);border:1px solid rgba(181,71,15,.15);font-size:8px}
+.b-age{background:var(--surf2);color:var(--muted);border:1px solid var(--line);font-size:8px}
+.card-title{font-family:'Source Serif 4',serif;font-size:14px;line-height:1.42;color:var(--ink);margin-bottom:5px;font-weight:600}
+.card-title a{color:var(--ink)}.card-title a:hover{color:var(--accent)}
+.snippet{font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:5px}
+.also{font-size:9px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-top:4px}
+.also a{color:var(--accent);font-size:9px}
+.status{padding:30px 18px;text-align:center;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.9}
+.loader{display:inline-flex;gap:4px;margin-bottom:10px}
+.loader i{width:4px;height:14px;background:var(--accent);display:inline-block;border-radius:2px;animation:tk 1s infinite ease-in-out}
+.loader i:nth-child(2){animation-delay:.15s}.loader i:nth-child(3){animation-delay:.3s}
+@keyframes tk{0%,100%{transform:scaleY(.3);opacity:.3}50%{transform:scaleY(1);opacity:1}}
+.legend{margin-top:16px;background:var(--surf);border:1px solid var(--line);border-radius:var(--r);padding:10px 16px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;box-shadow:var(--shadow)}
+.leg{display:flex;align-items:center;gap:5px}
+.leg-dot{width:9px;height:9px;border-radius:2px}
+footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--line);font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);line-height:1.9}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="top">
+    <span class="eyebrow">Public Programs & Speeches Wire — RSS Leadership</span>
+    <div class="clock"><span class="ldot"></span><span id="clk">—</span></div>
+  </div>
+  <h1>Sangh Wire</h1>
+  <p class="sub">Latest news, speeches, programs, interviews and RSS events for Dr. Mohan Bhagwat and Dattatreya Hosabale — from 40+ national, international and RSS-affiliated sources. Last 7 days only.</p>
+  <div class="scope">
+    OWNED BY: Apoorv &nbsp;|&nbsp; SOURCES: Organiser · Panchjanya · ANI · NDTV · The Hindu · TOI · WSJ · NYT · Guardian · FT · WashPost · Economic Times + 30 more<br>
+    Results filtered to last 7 days · Duplicate events merged · No private tracking
+  </div>
+</header>
+<div class="controls">
+  <button id="btn" onclick="load()">⟳ &nbsp;Refresh Wire</button>
+  <span class="lastup" id="lu">Not loaded — click Refresh</span>
+  <span class="acct"><span id="chg" style="display:none"><a href="/setup">🔐 पासवर्ड बदलें</a> · </span><a href="/logout">लॉग आउट</a></span>
+</div>
+<div class="board">
+  <div class="col">
+    <div class="col-head"><h2>Dr. Mohan Bhagwat</h2><div class="role">Sarsanghchalak (Chief) — Rashtriya Swayamsevak Sangh</div></div>
+    <div id="b-bhagwat"><div class="status">Click Refresh Wire to load.</div></div>
+  </div>
+  <div class="col">
+    <div class="col-head"><h2>Dattatreya Hosabale</h2><div class="role">Sarkaryavah (Gen. Secretary) — Rashtriya Swayamsevak Sangh</div></div>
+    <div id="b-hosabale"><div class="status">Click Refresh Wire to load.</div></div>
+  </div>
+</div>
+<div class="col col-global">
+  <div class="col-head"><h2>🌍 विदेशी मीडिया में संघ</h2><div class="role">Foreign press on RSS · Hindutva · Bhagwat · Hosabale — last 30 days (FT · NYT · WSJ · Guardian · Times · Telegraph · Bild · El País + more)</div></div>
+  <div id="b-global"><div class="status">Click Refresh Wire to load.</div></div>
+</div>
+<div class="legend">
+  <div class="leg"><div class="leg-dot" style="background:#888"></div>All Latest News</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--blue)"></div>Speeches & Statements</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--green)"></div>Programs & Visits</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--purple)"></div>Interviews & Podcasts</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--orange)"></div>Hindi News</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--red)"></div>RSS Events & Meetings</div>
+  <div class="leg"><div class="leg-dot" style="background:#0f6b78"></div>Foreign Media</div>
+</div>
+<footer>Sangh Wire — Owned by Apoorv &nbsp;|&nbsp; Only publicly reported news · No private tracking · All links open original articles</footer>
+</div>
 <script>
-const $=id=>document.getElementById(id),ld=k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}},sv=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
-const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function uid(){let u=ld('ar_uid');if(!/^[a-f0-9]{32}$/.test(u)){u=[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,'0')).join('');sv('ar_uid',u)}return u}
-async function call(p,b){try{const r=await fetch(ld('ar_api')+'/api/'+p,{method:b===undefined?'GET':'POST',headers:{'X-Token':ld('ar_tok'),'X-User':uid(),'Content-Type':'application/json'},body:b===undefined?undefined:JSON.stringify(b)});return await r.json()}catch(e){return{error:'Server se connect nahi hua ('+e.message+')'}}}
-const act=async(p)=>{const r=await call(p,{});if(r.error)alert(r.error);poll()};
-let recips=[],files=[],chats=[],sel={groups:new Set(),contacts:new Set()},loaded=false,loading=false,lastFailed=[],state='idle';
-try{recips=JSON.parse(ld('ar_r')||'[]')}catch(e){}
-const lbl=n=>typeof n==='string'?n:n.title,saveR=()=>sv('ar_r',JSON.stringify(recips));
-function show(p){document.querySelectorAll('.pg').forEach(e=>e.classList.toggle('on',e.id===p));document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.p===p));location.hash=p}
-document.querySelectorAll('nav a').forEach(a=>a.onclick=()=>show(a.dataset.p));
-function saveTok(){sv('ar_tok',$('tok').value.trim());sv('ar_api',$('api').value.trim().replace(/\/$/,''));poll()}
-async function sendOtp(){const r=await call('login',{phone:$('ph').value,channel:$('och').value});if(r.error)alert(r.error);poll()}
-async function verOtp(){const r=await call('otp',{code:$('otp').value});if(r.error)alert(r.error);$('otp').value='';poll()}
-let lockUntil=0;
-async function logout(){if(!confirm('Logout karein?\nAapka Arattai login hat jayega aur naya QR dikhega jise koi bhi apne Arattai app se scan karke login kar sakta hai.'))return;
- const r=await call('logout',{});if(r.error)return alert(r.error);
- lockUntil=Date.now()+10000;recips=[];saveR();renderR();chats=[];loaded=false;sel.groups.clear();sel.contacts.clear();lastFailed=[];files=[];renderF();$('text').value='';
- ['nG','nC'].forEach(i=>$(i).textContent='0');['groups','contacts'].forEach(renderList);$('qrArea').innerHTML='<p class="mu">QR ban raha hai...</p>';show('connect');poll()}
-async function uidFix(id){const r=await call('uid',{phone:$(id||'uph').value});if(r.error)return alert(r.error);show('bc');poll()}
-async function diag(){const r=await call('diag',{chat:$('dg').value});if(r.error)return alert(r.error);show('bc');poll()}
-async function forgetMe(){if(!confirm('Arattai se logout hoga aur server se aapka saara data delete hoga. Pakka?'))return;const r=await call('forget',{});alert(r.error||'Data delete ho gaya.');location.reload()}
-function renderR(){$('added').textContent=recips.length;$('tags').innerHTML=recips.map((n,i)=>`<span class="tag">${esc(lbl(n))}<b onclick="recips.splice(${i},1);saveR();renderR()">&times;</b></span>`).join('')}
-function addRec(x){if(typeof x==='string'){if(!recips.some(r=>lbl(r)===x))recips.push(x)}else if(!recips.some(r=>r.id===x.id))recips.push({id:x.id,title:x.title})}
-function addNames(){$('names').value.split('\n').map(x=>x.trim()).filter(Boolean).forEach(n=>addRec(chats.find(c=>c.title.toLowerCase()===n.toLowerCase())||n));$('names').value='';saveR();renderR()}
-// ---- Groups / Contacts pages
-const isG=(k,c)=>k==='groups'?c.kind==='group':c.kind!=='group';
-function mkList(k){$(k+'Box').innerHTML=`<div class="row"><input type="text" id="${k}Q" placeholder="Filter (naam likhein)" style="flex:1" oninput="renderList('${k}')"><button onclick="selAll('${k}')">Select all shown</button><button class="p" onclick="addSel('${k}')">Add to Broadcast</button><button onclick="loadChats(true)">Refresh</button></div><div id="${k}List"></div>`}
-function renderList(k){const q=$(k+'Q').value.toLowerCase(),L=chats.filter(c=>isG(k,c)&&(!q||c.title.toLowerCase().includes(q)));window['sh_'+k]=L;
- $(k+'List').innerHTML=L.map(c=>`<label class="li"><input type="checkbox" ${sel[k].has(c.id)?'checked':''} onchange="this.checked?sel['${k}'].add('${c.id}'):sel['${k}'].delete('${c.id}')"><span class="nm">${esc(c.title)}</span><span class="mu">${c.n?c.n+' members':''}${c.admin?' · admin':''}${c.kind==='contact'&&c.e2ee?' · DM':''}</span></label>`).join('')||'<p class="mu">Kuch nahi mila</p>';
- $(k+'Cnt').textContent=chats.filter(c=>isG(k,c)).length+' total, '+L.length+' dikh rahe'}
-const selAll=k=>{(window['sh_'+k]||[]).forEach(c=>sel[k].add(c.id));renderList(k)};
-function addSel(k){const L=chats.filter(c=>sel[k].has(c.id));if(!L.length)return alert('Pehle chats chuniye (checkbox)');L.forEach(addRec);sel[k].clear();saveR();renderR();renderList(k);show('bc')}
-async function loadChats(force){if(loading)return;loading=true;const d=await call('chats');loading=false;
- if(d.error||!(d.items&&d.items.length)){if(force)alert(d.error||('Koi chat nahi mila. '+(d.debug||'')));return}
- chats=d.items;loaded=true;$('nG').textContent=chats.filter(c=>c.kind==='group').length;$('nC').textContent=chats.filter(c=>c.kind!=='group').length;['groups','contacts'].forEach(renderList)}
-// ---- attachments
-function addFiles(L){[...L].forEach(f=>files.push(f));renderF()}
-function renderF(){$('files').innerHTML=files.map((f,i)=>`<div class="f">${f.type.startsWith('image/')?`<img src="${URL.createObjectURL(f)}">`:`<div class="ic">${esc((f.name.split('.').pop()||'').slice(0,4).toUpperCase())}</div>`}${esc(f.name.slice(0,16))} (${f.size>1048576?(f.size/1048576).toFixed(1)+' MB':Math.ceil(f.size/1024)+' KB'}) <b onclick="files.splice(${i},1);renderF()">&times;</b></div>`).join('')}
-$('drop').onclick=()=>$('fi').click();$('fi').onchange=e=>{addFiles(e.target.files);e.target.value=''};
-$('drop').ondragover=e=>e.preventDefault();$('drop').ondrop=e=>{e.preventDefault();addFiles(e.dataTransfer.files)};
-document.onpaste=e=>{const L=[...(e.clipboardData?.files||[])];if(L.length)addFiles(L.map(f=>f.name?f:new File([f],'pasted.png',{type:f.type})))};
-const b64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(',')[1]);r.onerror=no;r.readAsDataURL(f)});
-// ---- send
-async function go(list){list=Array.isArray(list)?list:recips;const text=$('text').value;
- if(!list.length)return alert('Pehle recipients add karein');if(!text.trim()&&!files.length)return alert('Message ya file chahiye');
- const live=$('live').checked;if(live&&!confirm('LIVE MODE: '+list.length+' chats me bhejna hai. Pakka?'))return;
- $('go').disabled=true;const fs=[];for(const f of files)fs.push({name:f.name,data:await b64(f)});
- const r=await call('send',{chats:list,text,files:fs,min:$('dmin').value,max:$('dmax').value,live,caption:$('cap').checked});if(r.error)alert(r.error);poll()}
-const retryFailed=()=>go(lastFailed.map(f=>f.rec||f.title));
-// ---- status
-const COL={ready:'#16a34a',sending:'#f5c400',login:'#f59e0b',starting:'#f5c400',idle:'#bbb'};
-async function poll(){const d=await call('status');
- if(d.error){$('dot').style.background='#dc2626';$('stl').textContent='Invite code / server?';$('dsSt').textContent='Error';$('dsMsg').textContent=d.error+' - Connect Arattai me code daal kar Save dabayein';return}
- state=d.state;$('dot').style.background=COL[d.state]||'#bbb';$('stl').textContent=d.state==='ready'?'Connected':d.state==='sending'?'Sending...':d.state==='login'?'Login chahiye':'Disconnected';
- $('dsSt').textContent=$('stl').textContent;$('dsMsg').textContent=d.msg||'';
- $('lgBox').style.display=d.state==='login'?'block':'none';$('lo').style.display=(d.state==='ready'||d.state==='sending')?'block':'none';if(d.need!=='qr')$('qrArea').innerHTML='Phone me Arattai &gt; Linked devices &gt; Link a device, phir QR scan karein.';$('phRow').style.display=d.need==='otp'?'none':'flex';$('otpRow').style.display=d.need==='otp'?'flex':'none';
- if(d.need==='qr'&&d.qr)$('qrArea').innerHTML=d.qr.svg?`<div style="width:230px;margin:auto;background:#fff">${d.qr.svg.startsWith('data:')?`<img src="${d.qr.svg}" alt="QR" style="width:100%;display:block">`:d.qr.svg}</div><p class="mu" style="text-align:center">${esc(d.qr.msg||'')}</p>`:`<p class="mu">${esc(d.qr.msg||'QR ban raha hai...')}</p>`;
- if(d.state==='ready'&&!loaded&&Date.now()>lockUntil)loadChats(); if(d.state!=='ready'&&d.state!=='sending')loaded=false;
- let miss=false;for(const x of d.log||[]){if(/uid NAHI mila|uid \(user id\) nahi mila/.test(x.m))miss=true;if(/uid mila|User ID set ho gaya/.test(x.m))miss=false}
- $('uidBan').style.display=miss&&d.state==='ready'?'block':'none';
- const j=d.job;if(j){const t=j.total||0;$('prog').textContent=`${j.done||0}/${t} · safal ${j.ok||0} · fail ${j.fail||0}${j.current?' · '+j.current:''}`;
-  $('fill').style.width=t?Math.round((j.done||0)*100/t)+'%':'0';$('sOk').textContent=j.ok||0;$('sFail').textContent=j.fail||0;
-  $('dsJob').textContent=`Safal ${j.ok||0}, Fail ${j.fail||0} (${j.done||0}/${t})`;lastFailed=j.failed||[];
-  $('fl').innerHTML=lastFailed.length&&d.state!=='sending'?`<div class="fl"><b>${lastFailed.length} chats fail hue:</b>${lastFailed.map(f=>`<div>• ${esc(f.title)} - <span class="mu">${esc(f.reason)}</span></div>`).join('')}<p><button class="p" onclick="retryFailed()">Sirf failed chats dobara bhejo</button></p></div>`:''}
- $('go').disabled=d.state!=='ready';
- const L=$('log'),near=L.scrollHeight-L.scrollTop-L.clientHeight<40;L.innerHTML=(d.log||[]).slice(-200).map(x=>`<div class="${x.k}">${esc(x.t)} ${esc(x.m)}</div>`).join('');if(near)L.scrollTop=L.scrollHeight}
-$('tok').value=ld('ar_tok');$('api').value=ld('ar_api');$('live').checked=false;mkList('groups');mkList('contacts');renderR();
-show(location.hash.slice(1)&&$(location.hash.slice(1))?location.hash.slice(1):'bc');poll();setInterval(poll,1500);
-</script></body></html>
+function tick(){document.getElementById('clk').textContent=new Date().toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+setInterval(tick,1000);tick();
+const esc=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML};
+function ageLabel(d){if(d===null||d===undefined)return null;const r=Math.round(d);if(r<=0)return 'today';if(r===1)return 'yesterday';if(r<2)return Math.round(d*24)+'h ago';return r+'d ago';}
+function card(item,cls,badge){
+  const age=ageLabel(item.ageDays);
+  let also='';
+  if(item.allSources&&item.allSources.length>1){
+    const links=item.allSources.filter(s=>s.name).map(s=>`<a href="${esc(s.link)}" target="_blank">${esc(s.name)}</a>`).join(' · ');
+    also=`<div class="also">Also: ${links}</div>`;
+  }
+  return `<div class="card ${cls}">
+    <div class="badges">${badge}<span class="badge b-src">${esc(item.source||'')}</span>${age?`<span class="badge b-age">${age}</span>`:''}</div>
+    <div class="card-title"><a href="${esc(item.link||'#')}" target="_blank" rel="noopener">${esc(item.title)}</a></div>
+    ${item.snippet?`<div class="snippet">${esc(item.snippet)}</div>`:''}
+    ${also}
+  </div>`;
+}
+function section(icon,label,items,cls,badge){
+  if(!items||!items.length)return '';
+  const id='s'+Math.random().toString(36).slice(2);
+  return `<div class="sec">
+    <div class="sec-h" onclick="tog('${id}',this)">
+      <span>${icon}</span><h3>${label}</h3><span class="cnt">${items.length}</span><span class="arr">▾</span>
+    </div>
+    <div class="sec-b" id="${id}">${items.map(i=>card(i,cls,badge)).join('')}</div>
+  </div>`;
+}
+function tog(id,h){const b=document.getElementById(id);b.classList.toggle('hidden');const a=h.querySelector('.arr');if(a)a.textContent=b.classList.contains('hidden')?'▸':'▾';}
+function render(key,data){
+  const el=document.getElementById('b-'+key);
+  if(!data){el.innerHTML='<div class="status">No data returned.</div>';return;}
+  if(data.error){el.innerHTML=`<div class="status">Error: ${esc(data.error)}</div>`;return;}
+  const notice=data.notice?`<div class="status" style="color:#b5470f;padding:10px 16px;font-size:10px">⚠ ${esc(data.notice)}</div>`:'';
+  const an=data.allNews||[];
+  const sp=data.speeches||[];
+  const pr=data.programs||[];
+  const iv=data.interviews||[];
+  const hi=data.hindiNews||[];
+  const og=data.orgEvents||[];
+  if(!an.length&&!sp.length&&!pr.length&&!iv.length&&!hi.length&&!og.length){
+    el.innerHTML=notice+'<div class="status">No news found in last 7 days.<br><span style="font-size:9.5px;opacity:.7">Try refreshing again in a few minutes.</span></div>';
+    return;
+  }
+  el.innerHTML=notice+
+    section('📰','All Latest News',an,'c-all','<span class="badge b-all">News</span>')+
+    section('🎙','Latest Speeches & Statements',sp,'c-sp','<span class="badge b-sp">Speech</span>')+
+    section('📅','Programs & Visits',pr,'c-pr','<span class="badge b-pr">Program</span>')+
+    section('🎤','Interviews & Podcasts',iv,'c-iv','<span class="badge b-iv">Interview</span>')+
+    section('🇮🇳','Hindi News',hi,'c-hi','<span class="badge b-hi">Hindi</span>')+
+    section('🏛','RSS Events & Meetings',og,'c-og','<span class="badge b-og">RSS Event</span>');
+}
+function renderGlobal(g){
+  const el=document.getElementById('b-global');
+  if(!g){el.innerHTML='<div class="status">No data returned.</div>';return;}
+  const notice=g.notice?`<div class="status" style="color:#b5470f;padding:10px 16px;font-size:10px">⚠ ${esc(g.notice)}</div>`:'';
+  const items=g.items||[];
+  if(!items.length){
+    el.innerHTML=notice+`<div class="status">इन विदेशी अख़बारों में पिछले ${g.days||30} दिन में संघ पर कोई ख़बर नहीं मिली।<br><span style="font-size:9.5px;opacity:.7">These papers write about the RSS only occasionally.</span></div>`;
+    return;
+  }
+  el.innerHTML=notice+section('🌍','Foreign Press on the Sangh',items,'c-gl','<span class="badge b-gl">Foreign</span>');
+}
+// show "पासवर्ड बदलें" only on the admin system
+fetch('/auth/status').then(r=>r.ok?r.json():null).then(j=>{if(j&&(j.admin||!j.adminSet))document.getElementById('chg').style.display='inline';}).catch(()=>{});
+async function load(){
+  const btn=document.getElementById('btn');
+  btn.disabled=true;btn.textContent='⟳  Searching…';
+  document.getElementById('lu').textContent='Searching 40+ sources (10-20 seconds)…';
+  ['bhagwat','hosabale'].forEach(k=>{
+    document.getElementById('b-'+k).innerHTML=
+      '<div class="status"><div class="loader"><i></i><i></i><i></i></div><br>Searching last 7 days across 40+ sources…<br><span style="font-size:9.5px;opacity:.6">WSJ · NYT · Guardian · FT · Organiser · ANI · NDTV + more</span></div>';
+  });
+  document.getElementById('b-global').innerHTML='<div class="status"><div class="loader"><i></i><i></i><i></i></div><br>Searching foreign papers (last 30 days)…</div>';
+  try{
+    const r=await fetch('/api/news');
+    if(r.status===401){location.reload();return;}  // session expired → show password screen
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    if(data.error){
+      ['bhagwat','hosabale'].forEach(k=>{document.getElementById('b-'+k).innerHTML=`<div class="status">${esc(data.error)}</div>`;});
+    } else {
+      ['bhagwat','hosabale'].forEach(k=>render(k,data.people?.[k]));
+      renderGlobal(data.globalMedia);
+    }
+    document.getElementById('lu').textContent='Last refreshed: '+new Date(data.generatedAt||Date.now()).toLocaleString('en-IN')+(data.cached?'  (saved copy, max 5 min old)':'')+(data.dailyUpdatedAt?'  ·  Daily deep search: '+new Date(data.dailyUpdatedAt).toLocaleString('en-IN'):'');
+  }catch(e){
+    ['bhagwat','hosabale'].forEach(k=>{document.getElementById('b-'+k).innerHTML=`<div class="status">Error: ${esc(e.message)}<br>Try refreshing again.</div>`;});
+    document.getElementById('b-global').innerHTML=`<div class="status">Error: ${esc(e.message)}</div>`;
+    document.getElementById('lu').textContent='Failed — try again';
+  }finally{
+    btn.disabled=false;btn.textContent='⟳  Refresh Wire';
+  }
+}
+</script>
+</body>
+</html>
