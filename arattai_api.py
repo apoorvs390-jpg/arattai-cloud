@@ -84,7 +84,37 @@ class _Body:
         return chunk
 
 
+V3_PATH = "/v3/files/arattai/sbulkupload"        # website ka asli upload endpoint (DevTools capture)
+V3_STRATS = [{"v3": True, "enc": e, "attr": a} for a in ("none", "json") for e in ("absent", "false", "true")]
+TEST_JPEG = __import__("base64").b64decode("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCAAIAAgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDpaKKK+CPXP//Z")
+
+
+def img_dims(data):
+    """(height, width) PNG/JPEG header se; na mile to None."""
+    try:
+        if data[:8] == b"\x89PNG\r\n\x1a\n":
+            return int.from_bytes(data[20:24], "big"), int.from_bytes(data[16:20], "big")
+        if data[:2] == b"\xff\xd8":
+            i = 2
+            while i < len(data) - 9:
+                if data[i] != 0xFF:
+                    i += 1
+                    continue
+                m = data[i + 1]
+                if m in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                    return int.from_bytes(data[i + 5:i + 7], "big"), int.from_bytes(data[i + 7:i + 9], "big")
+                if m in (0xD8, 0x01) or 0xD0 <= m <= 0xD7:
+                    i += 2
+                    continue
+                i += 2 + int.from_bytes(data[i + 2:i + 4], "big")
+    except Exception:
+        pass
+    return None
+
+
 def strat_label(st):
+    if st.get("v3"):
+        return "v3 enc={enc} attr={attr}".format(**st)
     return "sid={sid} hdr={hdr} csrf={csrf} cookies={cookies} ct={ctype} tkp={tkp}".format(**{"ctype": "mime", "tkp": False, **st})
 
 
@@ -500,6 +530,8 @@ class Backend:
     # ------------------------------------------------------------ upload
     def _attempt(self, chat_id, name, data, mime, caption, st):
         """Ek upload koshish, strategy `st` ke hisaab se. Response lautata hai."""
+        if st.get("v3"):
+            return self._attempt_v3(chat_id, name, data, mime, st)
         ts = int(time.time() * 1000)
         sid = "a" if st["sid"] == "a" else self._sid_candidates().get(st["sid"], "")
         if not sid:
@@ -534,6 +566,39 @@ class Backend:
                 h["Cookie"] = ck
             return requests.post(url, data=body, headers=h, timeout=(15, UPLOAD_TIMEOUT))
         return self.client.s.http.post(url, data=body, headers=h, timeout=(15, UPLOAD_TIMEOUT))
+
+    def _attempt_v3(self, chat_id, name, data, mime, st):
+        """Website jaisa upload: POST files.arattai.in/v3/files/arattai/sbulkupload (DevTools se copy kiye headers).
+        Body = chhota JSON attrs (x-body_attr_size) + file bytes. Response: {"file_id": ...}"""
+        ts = int(time.time() * 1000)
+        sid = next(iter(self._sid_candidates().values()), "")
+        if not sid:
+            raise ArattaiError("upload sid nahi mila")
+        q = lambda v: quote(str(v), safe="")
+        attrs = json.dumps({"thumb_data": ""}).encode() if st.get("attr") == "json" else b""
+        h = {"accept": "application/json, text/plain, */*", "accept-language": "en", "charset": "UTF-8",
+             "client-time": str(ts), "content-type": q(mime), "file-name": q(name),
+             "origin": "https://web.arattai.in", "referer": "https://web.arattai.in/", "user-agent": _UA,
+             "upload-id": "{}_{}".format(self.client.uid, ts), "x-arattai-id": chat_id,
+             "x-body_attr_size": str(len(attrs)), "x-client-initiated-time": str(ts), "x-client-time-utc": str(ts),
+             "x-cliq-content-type": q(mime), "x-cliq-msgid": str(ts - 143), "x-cliq-sid": q(sid),
+             "x-deferred-upload": "true", "x-dfs-service": "zfs", "x-filesize-list": str(len(data)),
+             "x-service": "arattai", "x-streammode": "1", "x-xhr-exception": "true"}
+        if st.get("enc") in ("true", "false"):
+            h["x-enc-file"] = st["enc"]
+        dims = img_dims(data) if mime.startswith("image/") else None
+        if dims:
+            h["x-dimensions"] = q(json.dumps({"h": dims[0], "w": dims[1]}, separators=(",", ":")))
+        try:
+            h.update(self.client.s._zcsrf_header())
+        except Exception:
+            pass
+        cb = None
+        if len(data) > 8 * 1048576:
+            mb = len(data) // 1048576
+            cb = lambda pct: self.log("info", "{}: upload {}% ({} MB)".format(name[:30], pct, mb))
+        url = _ps._BASE_MAP["files"].rstrip("/") + V3_PATH
+        return self.client.s.http.post(url, data=_Body(attrs + data, cb), headers=h, timeout=(15, UPLOAD_TIMEOUT))
 
     def _install(self, client):
         """Library text bhejte waqt apna WebSocket kholti hai - use hamara (browser-jaisa) tareeka do."""
@@ -782,7 +847,7 @@ class Backend:
         name = orig_name(p)
         last = "upload fail"
         self._prime()
-        for st in ([self._up_st] if self._up_st else (self._real_sid_strats()[:2] + STRATS[:1])):
+        for st in ([self._up_st] if self._up_st else (V3_STRATS[:1] + self._real_sid_strats()[:1])):
             try:
                 resp = self._attempt(chat_id, name, data, mime, caption, st)
             except ArattaiError as e:              # saved tareeke ka sid ab nahi mila
@@ -809,6 +874,22 @@ class Backend:
             self.log("err", "WebSocket sid ke bina upload (aur text) nahi chalega. Upar 'library:' wali lines bhejein. "
                             "Pehle Logout -> QR se dobara login karke try karein.")
             return False
+
+        # 0) Website ka asli tareeka (v3 sbulkupload) - chhoti test image se
+        for i, st in enumerate(V3_STRATS, 1):
+            try:
+                resp = self._attempt(chat_id, "upload-test.jpg", TEST_JPEG, "image/jpeg", "", st)
+                ok, body = self._judge(resp)
+            except Exception as e:
+                self.log("err", "v3 #{} {} -> {!r}".format(i, strat_label(st), e)[:300]); continue
+            extra = " ".join("{}={}".format(k, resp.headers[k][:100]) for k in ("x-error", "x-msg") if k in resp.headers)
+            self.log("ok" if ok else "warn", "v3 #{} {} -> HTTP {} {} {}".format(i, strat_label(st), resp.status_code, extra, body[:160]))
+            if ok:
+                self._up_st = st
+                self._save_st()
+                self.log("ok", "Upload accept hua (v3, {}). Test chat me ek chhoti peeli test image dikhni chahiye. "
+                               "Agar image chat me NAHI dikhi to ye adhura hai - live me mat bhejein, ye saari lines bhejein.".format(strat_label(st)))
+                return True
 
         # 1) Library ka apna upload function ho to sabse pehle wahi (wo sahi headers khud lagata hai)
         natives = [n for n in self.NATIVE if callable(getattr(self.client, n, None))]
