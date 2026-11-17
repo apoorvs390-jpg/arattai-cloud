@@ -85,7 +85,12 @@ class _Body:
 
 
 V3_PATH = "/v3/files/arattai/sbulkupload"        # website ka asli upload endpoint (DevTools capture)
-V3_STRATS = [{"v3": True, "enc": e, "attr": a} for a in ("none", "json") for e in ("absent", "false", "true")]
+V3_STRATS = [{"v3": True, "enc": e, "attr": a} for a in ("none", "json") for e in ("true", "false", "absent")]
+V3_MESSAGE_READY = False     # website pehle message bhejta hai phir file upload karta hai; message step abhi bana nahi
+
+
+class IncompleteUpload(ArattaiError):
+    """File server me upload ho gayi par chat me message nahi bana - isse 'bheja' nahi maanna chahiye."""
 TEST_JPEG = __import__("base64").b64decode("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCAAIAAgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDpaKKK+CPXP//Z")
 
 
@@ -858,6 +863,9 @@ class Backend:
                     self.log("info", "upload tareeka {} chala; server jawab: {}".format(strat_label(st), body[:120]))
                 self._up_st = st
                 self._save_st()
+                if st.get("v3") and not V3_MESSAGE_READY:
+                    raise IncompleteUpload("file upload ho gayi (file_id mila) par chat me message nahi bana - "
+                                           "message step abhi adhura hai, kuch deliver nahi hua")
                 return body
             last = "upload HTTP {} {}".format(resp.status_code, body[:150])
         raise ArattaiError(last)
@@ -999,7 +1007,7 @@ def run_job(be, job, log, stopped, wait, rng):
                             if be.diagnose_upload(chat["id"]):
                                 continue
                         slow = kind == "file" and "timed out" in str(ex).lower()
-                        if attempt >= (2 if slow else 3) or re.search(r"HTTP 4\d\d", str(ex)):
+                        if attempt >= (2 if slow else 3) or re.search(r"HTTP 4\d\d", str(ex)) or isinstance(ex, IncompleteUpload):
                             raise
                         log("warn", "{}: {} dobara koshish ({}/{})".format(
                             label, orig_name(arg) if kind == "file" else "text", attempt, 2 if slow else 3))
